@@ -13,6 +13,7 @@ const WD='日一二三四五六';
 const mondayOf=s=>{const d=pd(s);d.setDate(d.getDate()-((d.getDay()+6)%7));return ymd(d)};
 const nid=()=>Math.random().toString(36).slice(2,9);
 const fmt=n=>Math.round(n*100)/100;
+function fmtDT(iso){const d=new Date(iso);if(isNaN(d))return '';return d.getFullYear()+'/'+pad(d.getMonth()+1)+'/'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())}
 const COLORS=['#23756A','#3B6FD8','#C2456B','#D98A1F','#7A5AC8','#5E8C2E'];
 const THEMES=[{k:'teal',n:'青綠',l:'#23756A',d:'#4FB3A3'},{k:'blue',n:'藍',l:'#2F5FD0',d:'#86A6F5'},{k:'rose',n:'玫瑰',l:'#B83D62',d:'#EE8AA8'},{k:'orange',n:'橘',l:'#B0600E',d:'#F2A95C'},{k:'purple',n:'紫',l:'#6A4BC0',d:'#AE99F2'},{k:'gray',n:'灰',l:'#66706E',d:'#A3ADAA'},{k:'ink',n:'墨黑',l:'#2E3A37',d:'#C9D3D0'}];
 const HOST_THEME=document.documentElement.getAttribute('data-theme');
@@ -113,7 +114,7 @@ function startCloud(uid){
     for(const d of snap.docs){
       const k=d.id;if(timers[k]||inflight[k])continue;
       const v=JSON.parse(JSON.stringify(d.data()||{}));/* snapshots are frozen: copy before editing */
-      if(k==='config'){S.cfg={habits:v.habits||[],rewards:v.rewards||[],redeemed:v.redeemed||[],theme:v.theme||{},goals:v.goals||{},mig:v.mig||{},rwSort:v.rwSort||'custom'};migrate()}
+      if(k==='config'){S.cfg={habits:v.habits||[],rewards:v.rewards||[],redeemed:v.redeemed||[],theme:v.theme||{},goals:v.goals||{},mig:v.mig||{},rwSort:v.rwSort||'custom',lastBackup:v.lastBackup||null};migrate()}
       else if(k.startsWith('d-'))S.days[k.slice(2)]=v.e||{};
     }
     if(S.mode==='loading'){S.mode='cloud';setSync('已同步到雲端，手機和電腦看到的是同一份。')}
@@ -419,7 +420,7 @@ function vSettings(){let h='<div class="stack">';
   h+='<div class="card"><b>帳號</b><p class="hint" style="margin:4px 0 10px">目前登入：'+esc((S.user&&S.user.email)||'')+'<br>手機和電腦用同一個帳號登入，資料就會同步。</p><button class="btn ghost" data-act="signout">登出</button></div>';
   {const t=S.cfg.theme||{};
   h+='<div class="card"><b>外觀</b><div class="fld" style="margin:8px 0 10px"><span class="lb">主題色</span><div class="row" style="gap:14px">'+THEMES.map(x=>'<button class="swc" data-act="taccent" data-v="'+x.k+'" aria-pressed="'+((t.accent||'teal')===x.k)+'"><i style="background:linear-gradient(135deg,'+x.l+' 50%,'+x.d+' 50%)"></i>'+x.n+'</button>').join('')+'<button class="swc" data-act="taccent" data-v="custom" aria-pressed="'+(t.accent==='custom')+'" aria-expanded="'+(!!S.showPicker)+'"><i style="background:conic-gradient(#e33,#ec3,#3c5,#3ae,#73e,#e3a,#e33)"></i>自訂</button></div>'+(S.showPicker?customPanel(t):'')+savedColors(t)+'<span class="group">圓圈左上是淺色模式的顏色，右下是深色模式的顏色。</span></div><div class="fld" style="margin:0"><span class="lb">顯示模式</span><div class="seg">'+[['','跟隨系統'],['light','淺色'],['dark','深色']].map(([k,n])=>'<button data-act="tmode" data-v="'+k+'" aria-pressed="'+((t.mode||'')===k)+'">'+n+'</button>').join('')+'</div></div></div>'}
-  h+='<div class="card"><b>備份與還原</b><p class="hint" style="margin:4px 0 10px">下載一份備份檔，可以存到雲端硬碟或寄給自己，當作額外的保險。</p><div class="fld" style="margin-bottom:10px"><label for="bkName">檔案名稱</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="bkName" data-in="bkname" value="'+esc(S.bkName??('習慣打卡本備份-'+today()))+'" style="flex:1;min-width:0" autocomplete="off"><span class="meta">.json</span></div></div><div class="row"><button class="btn pri" data-act="backup">下載備份檔</button><label class="btn" for="restoreFile">從備份檔還原</label><input type="file" id="restoreFile" accept=".json,application/json" data-in="restore" style="position:absolute;width:1px;height:1px;opacity:0"></div>'+(S.bmsg?'<p class="hint">'+esc(S.bmsg)+'</p>':'');
+  h+='<div class="card"><b>備份與還原</b><p class="hint" style="margin:4px 0 10px">你的紀錄已經自動存在雲端、手機和電腦會自動同步，平常不需要手動備份。這裡的「下載備份檔」只是多一層保險——例如想留一份存檔，或要把資料搬到別的帳號時用，不下載也完全不影響雲端的資料。</p><p class="meta" style="margin:0 0 10px">'+(S.cfg.lastBackup?'上次手動備份：'+fmtDT(S.cfg.lastBackup):'還沒有手動備份過')+'</p><div class="fld" style="margin-bottom:10px"><label for="bkName">檔案名稱</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="bkName" data-in="bkname" value="'+esc(S.bkName??('習慣打卡本備份-'+today()))+'" style="flex:1;min-width:0" autocomplete="off"><span class="meta">.json</span></div></div><div class="row"><button class="btn pri" data-act="backup">下載備份檔</button><label class="btn" for="restoreFile">從備份檔還原</label><input type="file" id="restoreFile" accept=".json,application/json" data-in="restore" style="position:absolute;width:1px;height:1px;opacity:0"></div>'+(S.bmsg?'<p class="hint">'+esc(S.bmsg)+'</p>':'');
   if(S.restore)h+='<div style="margin-top:10px"><p><b>確定要還原嗎？</b>現在的所有習慣和紀錄會換成備份檔裡的內容（'+esc(S.restore.info)+'）。</p><div class="row"><button class="btn danger" data-act="restore2">確定還原</button><button class="btn ghost" data-act="restorecancel">取消</button></div></div>';
   return h+'</div></div>'}
 
@@ -570,6 +571,7 @@ document.addEventListener('click',ev=>{
         let nm=String(S.bkName??('習慣打卡本備份-'+today())).replace(/\.json$/i,'').replace(/[\\/:*?"<>|]/g,'-').trim()||('習慣打卡本備份-'+today());
         const blob=new Blob([data],{type:'application/json'});const u=URL.createObjectURL(blob);
         const a=document.createElement('a');a.href=u;a.download=nm+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);
+        S.cfg.lastBackup=new Date().toISOString();setCfg();
         S.bmsg='備份檔已經下載了。';}catch(e){S.bmsg='下載沒有成功，請再試一次。'}render();break}
     case 'authview':S.auth=Object.assign(S.auth,{view:v,err:'',msg:'',busy:false});render();break;
     case 'authlogin':(async()=>{const au=S.auth;au.err='';if(!au.email||!au.pw){au.err='請輸入 email 和密碼。';render();return}au.busy=true;render();
@@ -622,7 +624,7 @@ document.addEventListener('change',ev=>{
   if(k==='hexin'){setCfg();renderSoon()}
   if(k==='calf'){S.calFilter=el.value;render()}
   if(k==='restore'){const f=el.files&&el.files[0];if(!f)return;f.text().then(t=>{try{const j=JSON.parse(t);if(j.app!=='habit-book'||!j.cfg||!j.days)throw 0;
-    S.restore={cfg:{habits:j.cfg.habits||[],rewards:j.cfg.rewards||[],redeemed:j.cfg.redeemed||[],theme:j.cfg.theme||{},goals:j.cfg.goals||{},mig:j.cfg.mig||{}},days:j.days,info:(j.cfg.habits||[]).length+' 個習慣、'+Object.keys(j.days).length+' 天的紀錄，備份於 '+String(j.exported||'').slice(0,10)};S.bmsg=''}
+    S.restore={cfg:{habits:j.cfg.habits||[],rewards:j.cfg.rewards||[],redeemed:j.cfg.redeemed||[],theme:j.cfg.theme||{},goals:j.cfg.goals||{},mig:j.cfg.mig||{},rwSort:j.cfg.rwSort||'custom',lastBackup:j.cfg.lastBackup||null},days:j.days,info:(j.cfg.habits||[]).length+' 個習慣、'+Object.keys(j.days).length+' 天的紀錄，備份於 '+String(j.exported||'').slice(0,10)};S.bmsg=''}
     catch(e){S.bmsg='這個檔案不是習慣打卡本的備份檔。'}render()})}
 });
 document.addEventListener('keydown',ev=>{
