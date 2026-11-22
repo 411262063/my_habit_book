@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>習慣打卡本</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>習慣打卡本</h1>
+    <div class="pts">點數 <span class="hex" id="ptsVal">0</span></div>
+  </header>
+  <div class="sync" id="sync">連線中…</div>
+  <nav id="tabs"><div class="track">
+    <button data-act="tab" data-v="today">今天</button>
+    <button data-act="tab" data-v="cal">月曆</button>
+    <button data-act="tab" data-v="habits">習慣</button>
+    <button data-act="tab" data-v="rewards">獎勵</button>
+    <button data-act="tab" data-v="settings">設定</button>
+  </div></nav>
+  <main id="view"></main>
+</div>
+<div id="modal"></div>
+<script src="app.js"></script>
+</body>
+</html>
