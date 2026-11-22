@@ -1,3 +1,7 @@
+import {firebaseConfig} from './firebase-config.js';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js';
+import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,sendPasswordResetEmail} from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js';
+import {initializeFirestore,getFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,onSnapshot} from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
@@ -35,11 +39,30 @@ const TYPES={
 };
 
 const S={cfg:{habits:[],rewards:[],redeemed:[]},days:{},rowEdit:null,restore:null,bmsg:'',view:'today',date:today(),
-  calMonth:today().slice(0,7),calFilter:'all',mode:'loading',edit:null,confirm:null,drafts:{}};
+  calMonth:today().slice(0,7),calFilter:'all',mode:'loading',edit:null,confirm:null,drafts:{},
+  user:null,auth:{view:'login',email:'',pw:'',pw2:'',err:'',busy:false,msg:''}};
 
 /* ---------- storage ---------- */
-let base=null;const timers={},inflight={},dirty={};
+let base=null,unsub=null;const timers={},inflight={},dirty={};
 const LS='habit-book-v1';
+let fbAuth=null,fbDb=null,fbReady=false;
+try{
+  const app=initializeApp(firebaseConfig);
+  fbAuth=getAuth(app);
+  try{fbDb=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})})}
+  catch(e2){fbDb=getFirestore(app)} /* 離線快取用不到時（例如 Safari 隱私瀏覽），退回沒有離線快取但一樣能同步的模式 */
+  fbReady=true;
+}catch(e){fbReady=false}
+function authErrMsg(e){const M={
+  'auth/invalid-email':'email 格式不對，請檢查一下。',
+  'auth/user-not-found':'找不到這個帳號，email 有打對嗎？',
+  'auth/wrong-password':'密碼不對。',
+  'auth/invalid-credential':'email 或密碼不對。',
+  'auth/email-already-in-use':'這個 email 已經註冊過了，直接登入就好。',
+  'auth/weak-password':'密碼至少要 6 個字。',
+  'auth/too-many-requests':'嘗試太多次了，請稍後再試。',
+  'auth/network-request-failed':'連不到網路，請檢查網路連線再試一次。'
+};return (e&&M[e.code])||'發生錯誤，請再試一次。'}
 function saveLocal(){try{localStorage.setItem(LS,JSON.stringify({cfg:S.cfg,days:S.days}))}catch(e){}}
 function loadLocal(){try{const j=JSON.parse(localStorage.getItem(LS)||'null');if(j){S.cfg=j.cfg||S.cfg;S.days=j.days||{}}}catch(e){}}
 function setSync(t){$('#sync').textContent=t}
@@ -53,12 +76,12 @@ function save(key,delay=400){
 async function writeDoc(key){
   if(inflight[key]){dirty[key]=true;return}
   inflight[key]=true;
-  try{await base.doc(key).set(JSON.parse(JSON.stringify(body(key))))}
+  try{await setDoc(doc(base,key),JSON.parse(JSON.stringify(body(key))))}
   catch(e){
     inflight[key]=false;
     if(e&&e.code==='unavailable'){setTimeout(()=>writeDoc(key),800+Math.random()*800);return}
-    if(e&&e.code==='invalid_argument'){S.mode='local';saveLocal();setSync('你目前沒有在這個頁面儲存資料的權限，紀錄先存在這個瀏覽器。請分享給你的人把你的權限改成可以使用（Contributor）。');return}
-    setSync(e&&e.code==='quota_exceeded'?'雲端空間已滿，最新的變更沒有存到。':'這筆變更沒有存到雲端，請稍後再試一次。');return;
+    if(e&&e.code==='permission-denied'){S.mode='local';saveLocal();setSync('你目前沒有在雲端儲存資料的權限，紀錄先存在這個瀏覽器。');return}
+    setSync(e&&e.code==='resource-exhausted'?'雲端空間已滿，最新的變更沒有存到。':'這筆變更沒有存到雲端，請稍後再試一次。');return;
   }
   inflight[key]=false;
   if(dirty[key]){dirty[key]=false;return writeDoc(key)}
@@ -70,31 +93,34 @@ function relock(ds,h){const e=entries(ds);const r=e.__r||(e.__r={});const v=e[h.
 function setVal(ds,hid,v){const e=entries(ds);if(v===null||v===undefined)delete e[hid];else e[hid]=v;const h=S.cfg.habits.find(x=>x.id===hid);if(h)relock(ds,h);save(dayKey(ds))}
 function setCfg(){save('config',200)}
 
-let DL=null;
 async function init(){
   render();
-  const C=window.claude;
-  if(C&&C.use)C.use('downloads').then(d=>{DL=d;if(S.view==='habits')renderSoon()}).catch(()=>{});
-  if(!C||!C.use){useLocal('這裡連不到雲端，資料只會存在這個瀏覽器。');return}
-  const slow=setTimeout(()=>{if(S.mode==='loading')setSync('雲端連線比較慢，資料還在載入…')},10000);
+  if(!fbReady){useLocal('這裡連不到雲端服務，資料只會存在這個瀏覽器。');return}
   try{
-    const [dbx,user]=await Promise.all([C.use('db'),C.use('user')]);
-    const id=user?await user.id():null;
-    if(!dbx||!id){clearTimeout(slow);useLocal('沒有登入或連不到雲端，資料只會存在這個瀏覽器。');return}
-    base=dbx.collection('data/users/'+id);
-    base.onSnapshot(snap=>{
-      if(!snap.metadata.fromCache)clearTimeout(slow);
-      for(const d of snap.docs){
-        const k=d.id;if(timers[k]||inflight[k])continue;
-        const v=JSON.parse(JSON.stringify(d.data()||{}));/* snapshots are frozen: copy before editing */
-        if(k==='config'){S.cfg={habits:v.habits||[],rewards:v.rewards||[],redeemed:v.redeemed||[],theme:v.theme||{},goals:v.goals||{},mig:v.mig||{},rwSort:v.rwSort||'custom'};migrate()}
-        else if(k.startsWith('d-'))S.days[k.slice(2)]=v.e||{};
-      }
-      if(S.mode==='loading'){S.mode='cloud';setSync('已同步到雲端，手機和電腦看到的是同一份。')}
-      renderSoon();
-    },err=>{clearTimeout(slow);if(S.mode==='loading')useLocal('連不到雲端，資料先存在這個瀏覽器。');else setSync('和雲端的連線中斷了，重新整理頁面可以再連一次。')});
-  }catch(e){clearTimeout(slow);useLocal('連不到雲端，資料先存在這個瀏覽器。')}
+    onAuthStateChanged(fbAuth,u=>{
+      if(u){S.user=u;startCloud(u.uid)}
+      else{S.user=null;stopCloud();S.mode='auth';S.auth=Object.assign(S.auth,{err:'',busy:false});render()}
+    },()=>{useLocal('連不到雲端，資料先存在這個瀏覽器。')});
+  }catch(e){useLocal('連不到雲端，資料先存在這個瀏覽器。')}
 }
+function startCloud(uid){
+  if(unsub){unsub();unsub=null}
+  S.mode='loading';render();
+  base=collection(fbDb,'data/users/'+uid);
+  const slow=setTimeout(()=>{if(S.mode==='loading')setSync('雲端連線比較慢，資料還在載入…')},10000);
+  unsub=onSnapshot(base,snap=>{
+    if(!snap.metadata.fromCache)clearTimeout(slow);
+    for(const d of snap.docs){
+      const k=d.id;if(timers[k]||inflight[k])continue;
+      const v=JSON.parse(JSON.stringify(d.data()||{}));/* snapshots are frozen: copy before editing */
+      if(k==='config'){S.cfg={habits:v.habits||[],rewards:v.rewards||[],redeemed:v.redeemed||[],theme:v.theme||{},goals:v.goals||{},mig:v.mig||{},rwSort:v.rwSort||'custom'};migrate()}
+      else if(k.startsWith('d-'))S.days[k.slice(2)]=v.e||{};
+    }
+    if(S.mode==='loading'){S.mode='cloud';setSync('已同步到雲端，手機和電腦看到的是同一份。')}
+    renderSoon();
+  },err=>{clearTimeout(slow);if(S.mode==='loading')useLocal('連不到雲端，資料先存在這個瀏覽器。');else setSync('和雲端的連線中斷了，重新整理頁面可以再連一次。')});
+}
+function stopCloud(){if(unsub){unsub();unsub=null}Object.keys(timers).forEach(k=>{clearTimeout(timers[k]);delete timers[k]});base=null;S.cfg={habits:[],rewards:[],redeemed:[]};S.days={}}
 function useLocal(msg){S.mode='local';loadLocal();migrate();setSync(msg);render()}
 
 /* ---------- logic ---------- */
@@ -196,12 +222,34 @@ document.addEventListener('focusout',()=>setTimeout(()=>{if(pending){pending=fal
 function render(){
   applyTheme();
   $('#ptsVal').textContent=balance();
+  $('#tabs').style.display=(S.mode==='auth'||S.mode==='loading')?'none':'';
   document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-current',b.dataset.v===S.view?'page':'false'));
   const v=$('#view');
-  if(S.mode==='loading'){v.innerHTML='<div class="card empty">正在載入你的紀錄…</div>';return}
+  if(S.mode==='loading'){v.innerHTML='<div class="card empty">正在載入你的紀錄…</div>';$('#modal').innerHTML='';return}
+  if(S.mode==='auth'){v.innerHTML=vAuth();$('#modal').innerHTML='';return}
   v.innerHTML=S.view==='today'?vToday():S.view==='cal'?vCal():S.view==='habits'?vHabits():S.view==='settings'?vSettings():vRewards();
   $('#modal').innerHTML=S.edit?vEdit():S.calc?vCalc():'';
 }
+function vAuth(){
+  const a=S.auth;let h='<div class="stack"><div class="card">';
+  if(a.view==='reset'){
+    h+='<b>重設密碼</b><p class="hint" style="margin:6px 0 10px">輸入註冊時用的 email，我們會寄一封重設密碼的信過去。</p>';
+    h+='<div class="fld"><label for="au-email">Email</label><input type="email" id="au-email" data-au="email" value="'+esc(a.email)+'" autocomplete="username"></div>';
+    if(a.err)h+='<p class="hint" style="color:var(--warn)">'+esc(a.err)+'</p>';
+    if(a.msg)h+='<p class="hint">'+esc(a.msg)+'</p>';
+    h+='<div class="row"><button class="btn pri big" data-act="authreset"'+(a.busy?' disabled':'')+'>寄出重設信</button></div>';
+    h+='<p style="margin-top:12px"><button class="btn ghost sm" data-act="authview" data-v="login">回到登入</button></p>';
+  }else{
+    const signup=a.view==='signup';
+    h+='<b>'+(signup?'建立帳號':'登入')+'</b><p class="hint" style="margin:6px 0 10px">'+(signup?'手機和電腦用同一個帳號登入，資料就會自動同步。':'用你的帳號登入，手機和電腦都能看到同一份紀錄。')+'</p>';
+    h+='<div class="fld"><label for="au-email">Email</label><input type="email" id="au-email" data-au="email" value="'+esc(a.email)+'" autocomplete="username"></div>';
+    h+='<div class="fld"><label for="au-pw">密碼</label><input type="password" id="au-pw" data-au="pw" value="'+esc(a.pw)+'" autocomplete="'+(signup?'new-password':'current-password')+'"></div>';
+    if(signup)h+='<div class="fld"><label for="au-pw2">再輸入一次密碼</label><input type="password" id="au-pw2" data-au="pw2" value="'+esc(a.pw2)+'" autocomplete="new-password"></div>';
+    if(a.err)h+='<p class="hint" style="color:var(--warn)">'+esc(a.err)+'</p>';
+    h+='<div class="row"><button class="btn pri big" data-act="'+(signup?'authsignup':'authlogin')+'"'+(a.busy?' disabled':'')+'>'+(signup?'建立帳號並登入':'登入')+'</button></div>';
+    h+='<p style="margin-top:12px">'+(signup?'已經有帳號了？<button class="btn ghost sm" data-act="authview" data-v="login">登入</button>':'還沒有帳號？<button class="btn ghost sm" data-act="authview" data-v="signup">建立帳號</button>　<button class="btn ghost sm" data-act="authview" data-v="reset">忘記密碼</button>')+'</p>';
+  }
+  return h+'</div></div>'}
 function dateTitle(ds){const d=pd(ds);return (d.getMonth()+1)+'/'+d.getDate()+'（'+WD[d.getDay()]+'）'}
 function vToday(){
   const ds=S.date,isT=ds===today();const hs=S.cfg.habits;
@@ -368,9 +416,10 @@ document.addEventListener('pointercancel',()=>{if(drag){drag=null;setCfg()}});
 function pickAt(box,ev){const r=box.getBoundingClientRect();const x=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(ev.clientY-r.top)/r.height));
   if(box.id==='hueBar')HSV[0]=x*359.9;else{HSV[1]=x;HSV[2]=1-y}syncCustom(hsv2hex(...HSV),true)}
 function vSettings(){let h='<div class="stack">';
+  h+='<div class="card"><b>帳號</b><p class="hint" style="margin:4px 0 10px">目前登入：'+esc((S.user&&S.user.email)||'')+'<br>手機和電腦用同一個帳號登入，資料就會同步。</p><button class="btn ghost" data-act="signout">登出</button></div>';
   {const t=S.cfg.theme||{};
   h+='<div class="card"><b>外觀</b><div class="fld" style="margin:8px 0 10px"><span class="lb">主題色</span><div class="row" style="gap:14px">'+THEMES.map(x=>'<button class="swc" data-act="taccent" data-v="'+x.k+'" aria-pressed="'+((t.accent||'teal')===x.k)+'"><i style="background:linear-gradient(135deg,'+x.l+' 50%,'+x.d+' 50%)"></i>'+x.n+'</button>').join('')+'<button class="swc" data-act="taccent" data-v="custom" aria-pressed="'+(t.accent==='custom')+'" aria-expanded="'+(!!S.showPicker)+'"><i style="background:conic-gradient(#e33,#ec3,#3c5,#3ae,#73e,#e3a,#e33)"></i>自訂</button></div>'+(S.showPicker?customPanel(t):'')+savedColors(t)+'<span class="group">圓圈左上是淺色模式的顏色，右下是深色模式的顏色。</span></div><div class="fld" style="margin:0"><span class="lb">顯示模式</span><div class="seg">'+[['','跟隨系統'],['light','淺色'],['dark','深色']].map(([k,n])=>'<button data-act="tmode" data-v="'+k+'" aria-pressed="'+((t.mode||'')===k)+'">'+n+'</button>').join('')+'</div></div></div>'}
-  h+='<div class="card"><b>備份與還原</b><p class="hint" style="margin:4px 0 10px">下載一份備份檔。在 iPhone 上會跳出分享選單，可以選 Gmail 寄給自己，或存到雲端硬碟。</p><div class="fld" style="margin-bottom:10px"><label for="bkName">檔案名稱</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="bkName" data-in="bkname" value="'+esc(S.bkName??('習慣打卡本備份-'+today()))+'" style="flex:1;min-width:0" autocomplete="off"><span class="meta">.json</span></div></div><div class="row"><button class="btn pri" data-act="backup"'+(DL?'':' disabled')+'>下載備份檔</button><label class="btn" for="restoreFile">從備份檔還原</label><input type="file" id="restoreFile" accept=".json,application/json" data-in="restore" style="position:absolute;width:1px;height:1px;opacity:0"></div>'+(DL?'':'<p class="hint">這個畫面沒辦法下載檔案，請在 claude.ai 打開這個頁面再試。</p>')+(S.bmsg?'<p class="hint">'+esc(S.bmsg)+'</p>':'');
+  h+='<div class="card"><b>備份與還原</b><p class="hint" style="margin:4px 0 10px">下載一份備份檔，可以存到雲端硬碟或寄給自己，當作額外的保險。</p><div class="fld" style="margin-bottom:10px"><label for="bkName">檔案名稱</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="bkName" data-in="bkname" value="'+esc(S.bkName??('習慣打卡本備份-'+today()))+'" style="flex:1;min-width:0" autocomplete="off"><span class="meta">.json</span></div></div><div class="row"><button class="btn pri" data-act="backup">下載備份檔</button><label class="btn" for="restoreFile">從備份檔還原</label><input type="file" id="restoreFile" accept=".json,application/json" data-in="restore" style="position:absolute;width:1px;height:1px;opacity:0"></div>'+(S.bmsg?'<p class="hint">'+esc(S.bmsg)+'</p>':'');
   if(S.restore)h+='<div style="margin-top:10px"><p><b>確定要還原嗎？</b>現在的所有習慣和紀錄會換成備份檔裡的內容（'+esc(S.restore.info)+'）。</p><div class="row"><button class="btn danger" data-act="restore2">確定還原</button><button class="btn ghost" data-act="restorecancel">取消</button></div></div>';
   return h+'</div></div>'}
 
@@ -517,8 +566,23 @@ document.addEventListener('click',ev=>{
     case 'picker':S.showPicker=!S.showPicker;render();break;
     case 'taccent':if(v==='custom'){if(S.showPicker){S.showPicker=false;render();break}S.showPicker=true}else S.showPicker=false;S.cfg.theme=Object.assign({},S.cfg.theme,{accent:v});if(v==='custom'&&!S.cfg.theme.custom){const r=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();S.cfg.theme.custom=/^#[0-9a-f]{6}$/i.test(r)?r:'#23756A'}setCfg();render();break;
     case 'tmode':S.cfg.theme=Object.assign({},S.cfg.theme,{mode:v});setCfg();render();break;
-    case 'backup':(async()=>{try{const data=JSON.stringify({app:'habit-book',v:1,exported:new Date().toISOString(),cfg:S.cfg,days:S.days});
-        let nm=String(S.bkName??('習慣打卡本備份-'+today())).replace(/\.json$/i,'').replace(/[\\/:*?"<>|]/g,'-').trim()||('習慣打卡本備份-'+today());await DL.save({filename:nm+'.json',data});S.bmsg='備份檔已經交出去了。';}catch(e){S.bmsg=e&&e.code==='declined'?'已取消下載。':'下載沒有成功，請再試一次。'}render()})();break;
+    case 'backup':{try{const data=JSON.stringify({app:'habit-book',v:1,exported:new Date().toISOString(),cfg:S.cfg,days:S.days});
+        let nm=String(S.bkName??('習慣打卡本備份-'+today())).replace(/\.json$/i,'').replace(/[\\/:*?"<>|]/g,'-').trim()||('習慣打卡本備份-'+today());
+        const blob=new Blob([data],{type:'application/json'});const u=URL.createObjectURL(blob);
+        const a=document.createElement('a');a.href=u;a.download=nm+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);
+        S.bmsg='備份檔已經下載了。';}catch(e){S.bmsg='下載沒有成功，請再試一次。'}render();break}
+    case 'authview':S.auth=Object.assign(S.auth,{view:v,err:'',msg:'',busy:false});render();break;
+    case 'authlogin':(async()=>{const au=S.auth;au.err='';if(!au.email||!au.pw){au.err='請輸入 email 和密碼。';render();return}au.busy=true;render();
+      try{await signInWithEmailAndPassword(fbAuth,au.email.trim(),au.pw)}catch(e){au.busy=false;au.err=authErrMsg(e);render()}})();break;
+    case 'authsignup':(async()=>{const au=S.auth;au.err='';
+      if(!au.email||!au.pw){au.err='請輸入 email 和密碼。';render();return}
+      if(au.pw.length<6){au.err='密碼至少要 6 個字。';render();return}
+      if(au.pw!==au.pw2){au.err='兩次輸入的密碼不一樣。';render();return}
+      au.busy=true;render();
+      try{await createUserWithEmailAndPassword(fbAuth,au.email.trim(),au.pw)}catch(e){au.busy=false;au.err=authErrMsg(e);render()}})();break;
+    case 'authreset':(async()=>{const au=S.auth;au.err='';au.msg='';if(!au.email){au.err='請輸入 email。';render();return}au.busy=true;render();
+      try{await sendPasswordResetEmail(fbAuth,au.email.trim());au.busy=false;au.msg='已經把重設密碼的信寄到 '+au.email+'，記得看看垃圾信件匣。';render()}catch(e){au.busy=false;au.err=authErrMsg(e);render()}})();break;
+    case 'signout':signOut(fbAuth);break;
     case 'restore2':{const r=S.restore;S.restore=null;S.cfg=r.cfg;S.days=r.days;S.bmsg='已還原。';
       if(S.mode==='cloud'){save('config',0);Object.keys(S.days).forEach((d,i)=>save(dayKey(d),100+i*60))}else saveLocal();render();break}
     case 'restorecancel':S.restore=null;render();break;
@@ -536,6 +600,7 @@ document.addEventListener('click',ev=>{
   }});
 document.addEventListener('input',ev=>{
   const el=ev.target;
+  if(el.dataset.au){S.auth[el.dataset.au]=el.value;return}
   if(el.dataset.e){editInput(el);return}
   if(el.dataset.in==='hexin'){let v=el.value.trim();if(v[0]!=='#')v='#'+v;if(/^#[0-9a-f]{6}$/i.test(v))syncCustom(v.toLowerCase());return}
   const hid=el.dataset.h;const k=el.dataset.in;if(!k)return;
@@ -565,5 +630,6 @@ document.addEventListener('keydown',ev=>{
   if(S.calc){const k=ev.key;const map={'*':'×','/':'÷','-':'−','+':'+',Backspace:'back',Delete:'C'};if(/^[0-9.]$/.test(k)){calcKey(k);ev.preventDefault()}else if(map[k]){calcKey(map[k]);ev.preventDefault()}else if(k==='Enter'||k==='='){const b=document.querySelector('[data-act="calcok"]');b&&b.click();ev.preventDefault()}else if(k==='Escape'){S.calc=null;render()}return}
   if(ev.key==='Enter'&&ev.target.dataset&&(ev.target.dataset.in==='dfield'||ev.target.dataset.in==='dlabel')){ev.preventDefault();const b=document.querySelector('[data-act="addrow"][data-h="'+ev.target.dataset.h+'"]');b&&b.click()}
   if(ev.key==='Enter'&&ev.target.dataset&&ev.target.dataset.in==='numdraft'){ev.preventDefault();const b=document.querySelector('[data-act="calc"][data-h="'+ev.target.dataset.h+'"]');b&&b.click()}
+  if(ev.key==='Enter'&&ev.target.dataset&&ev.target.dataset.au){ev.preventDefault();const b=document.querySelector('#view [data-act^="auth"]:not([data-act="authview"])');b&&b.click()}
 });
 init();
