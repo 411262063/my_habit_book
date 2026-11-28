@@ -27,6 +27,8 @@ function applyTheme(){const t=S.cfg.theme||{};const r=document.documentElement;
   const th=themeColors(t);const ac=dark?th.d:th.l;r.style.setProperty('--accent',ac);r.style.setProperty('--good',ac);r.style.setProperty('--accent-ink',inkOn(ac))}
 /* 彩色底上的字要用深色還是白色：選對比比較高的那個（底色亮度約 0.195 以上用深色字） */
 function inkOn(c){if(!/^#[0-9a-f]{6}$/i.test(c||''))return 'var(--accent-ink)';return lum(c)>.195?'var(--ink-on-bright)':'var(--ink-on-deep)'}
+/* 習慣顏色當底、上面放白字時用：太亮的顏色（例如橘、綠）一點一點加黑，直到白字的對比到 4.5 */
+function deepen(c){if(!/^#[0-9a-f]{6}$/i.test(c||''))return c;let x=c,t=0;while(1.05/(lum(x)+.05)<4.5&&t<.6){t=Math.round((t+.05)*100)/100;x=mixHex(c,'#000000',t)}return x}
 try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>applyTheme())}catch(e){}
 const TYPES={
   check:{label:'打勾',group:'pre',desc:'做了就按一下'},
@@ -200,7 +202,7 @@ document.addEventListener('keydown',ev=>{const g=ev.target.closest&&ev.target.cl
   if(key==='habits')S.cfg.habits=arr;else S.cfg.rewards=arr;setCfg();render();const ng=document.querySelector('[data-ditem="'+item.dataset.ditem+'"] [data-grip]');ng&&ng.focus()});
 function logOf(ds,hid){const e=S.days[ds]||{};return ((e.__log||{})[hid])||[]}
 function setLog(ds,hid,arr){const e=entries(ds);e.__log=Object.assign({},e.__log||{});if(arr&&arr.length)e.__log[hid]=arr;else delete e.__log[hid]}
-function ring(pct,color,size,inner,th){const p=Math.max(0,Math.min(1,pct||0));return '<span class="ring'+(p>=1&&inner&&inner.indexOf('✓')>=0?' full':'')+'" style="--p:'+Math.round(p*100)+';--rc:'+color+';--ri:'+inkOn(color)+';--sz:'+size+'px;--th:'+(th||5)+'px">'+(inner||'')+'</span>'}
+function ring(pct,color,size,inner,th){const p=Math.max(0,Math.min(1,pct||0));return '<span class="ring'+(p>=1&&inner&&inner.indexOf('✓')>=0?' full':'')+'" style="--p:'+Math.round(p*100)+';--rc:'+color+';--rf:'+deepen(color)+';--sz:'+size+'px;--th:'+(th||5)+'px">'+(inner||'')+'</span>'}
 function ratioMax(h){return h.mode==='pct'?100:Math.max(2,Math.min(1000,Number(h.denom)||10))}
 function ratioTxt(h,v){return h.mode==='pct'?fmt(v)+'%':fmt(v)+' / '+ratioMax(h)}
 function habitPct(h,v){if(h.type==='ratio'&&typeof v==='number')return v/ratioMax(h);if(h.type==='number'&&typeof v==='number'&&h.dir==='ge'&&h.target)return v/h.target;if(h.type==='list'&&Array.isArray(v))return v.length/(h.minCount||1);return 0}
@@ -265,7 +267,7 @@ function vHabitCard(x,ds){
   let chip=d?'<span class="chip done">完成 +'+ptsOn(x,ds)+'</span>':'<span class="chip">未完成</span>';
   if((x.freq||{}).kind==='weekly'){const c=weekCount(x,ds),t=x.freq.times||1;chip+=' <span class="chip week">本週 '+c+'/'+t+'</span>'}
   const hc=esc(x.color||COLORS[0]);
-  let h='<div class="card habit" style="--hc:'+hc+';--hc-ink:'+inkOn(x.color||COLORS[0])+'"><div class="hhead">'+ring(d?1:habitPct(x,v),hc,40,d?'<span>✓</span>':'',5)+'<div class="grow"><div class="hname">'+esc(x.name)+'</div><div class="meta">'+freqLabel(x)+'</div></div><div style="margin-right:14px">'+chip+'</div></div><div style="margin-top:12px">';
+  let h='<div class="card habit" style="--hc:'+hc+';--hc-fill:'+deepen(x.color||COLORS[0])+';--hc-ink:var(--ink-on-deep)"><div class="hhead">'+ring(d?1:habitPct(x,v),hc,40,d?'<span>✓</span>':'',5)+'<div class="grow"><div class="hname">'+esc(x.name)+'</div><div class="meta">'+freqLabel(x)+'</div></div><div style="margin-right:14px">'+chip+'</div></div><div style="margin-top:12px">';
   const a='data-h="'+x.id+'"';
   switch(x.type){
     case 'check':h+='<button class="tick" data-act="check" '+a+' aria-pressed="'+(v===true)+'"><span class="o">✓</span><span>'+(v===true?'已完成<span class="meta" style="display:block;font-weight:400">再按一下可以取消</span>':'做完了就按一下')+'</span></button>';break;
