@@ -212,20 +212,6 @@ function labelPh(h){if((h.fields||[]).some(f=>fName(f)==='主食'))return '吃�
   if(fromHint||presetsOf(h).length)return (h.fields||[]).some(f=>fName(f)==='主食')?'吃了什麼，例如：雞肉飯＋燙青菜':(fromHint?'內容':(h.labelHint||'內容'));return h.labelHint||'名稱'}
 function presetsOf(h){if(h.presets!=null&&String(h.presets).trim()!=='')return String(h.presets).split(/[,，、／\/]/).map(s=>s.trim()).filter(Boolean);if(h.presets==null){const l=String(h.labelHint||'').split(/[／\/、]/).map(s=>s.trim()).filter(Boolean);if(l.length>1)return l}return []}
 function listSums(h,v){const n=(h.fields||[]).length;const s=new Array(n).fill(0);(v||[]).forEach(r=>(r.f||[]).forEach((x,i)=>{if(i<n)s[i]+=Number(x)||0}));return s}
-function remindersNow(){return [];
-  const now=new Date();const hm=pad(now.getHours())+':'+pad(now.getMinutes());const out=[];const ds=today();
-  for(const h of S.cfg.habits){const r=h.reminder||{mode:'none'};if(!scheduled(h,ds)||doneOn(h,ds))continue;
-    if((h.freq||{}).kind==='weekly'&&weekCount(h,ds)>=(h.freq.times||1))continue;
-    if(r.mode==='time'&&r.time&&hm>=r.time)out.push(esc(h.name)+'：提醒時間 '+r.time+' 已到');
-    if(r.mode==='interval'&&r.from&&r.to&&hm>=r.from&&hm<=r.to){
-      const every=Math.max(1,Number(r.every)||2);const [fh,fm]=r.from.split(':').map(Number);
-      let t=fh*60+fm;const n=now.getHours()*60+now.getMinutes();while(t+every*60<=n)t+=every*60;
-      const nx=t+every*60;const [th,tm]=r.to.split(':').map(Number);
-      out.push(esc(h.name)+'：每 '+every+' 小時提醒一次'+(nx<=th*60+tm?'，下次 '+pad(Math.floor(nx/60))+':'+pad(nx%60):''));
-    }}
-  return out}
-function reminderLabel(h){return '';const r=h.reminder||{};if(r.mode==='time')return '每天 '+r.time+' 提醒';
-  if(r.mode==='interval')return r.from+'–'+r.to+' 每 '+(r.every||2)+' 小時提醒';return ''}
 
 /* ---------- render ---------- */
 let pending=false;
@@ -271,7 +257,6 @@ function vToday(){
   const due=hs.filter(x=>scheduled(x,ds));const done=due.filter(x=>doneOn(x,ds));
   let pts=0;due.forEach(x=>pts+=ptsOn(x,ds));
   {const pc=due.length?done.length/due.length:0;h+='<div class="card hhead">'+ring(pc,'var(--accent)',68,'<span style="font-size:17px">'+Math.round(pc*100)+'%</span>',7)+'<div class="grow"><div class="hname">完成 '+done.length+' / '+due.length+' 項</div><div class="meta">這天得到 '+pts+' 點'+(done.length===due.length&&due.length?'，全部完成！':'')+'</div></div></div>'}
-  if(isT){const r=remindersNow();if(r.length)h+='<div class="card remind"><h2>提醒</h2><ul>'+r.map(x=>'<li>'+x+'</li>').join('')+'</ul><p class="hint" style="margin:6px 0 0">網頁沒辦法讓手機跳通知，打開這裡時才看得到。</p></div>'}
   const off=hs.filter(x=>!scheduled(x,ds));
   for(const x of due)h+=vHabitCard(x,ds);
   if(off.length)h+='<p class="hint">今天沒有排：'+off.map(x=>esc(x.name)).join('、')+'</p>';
@@ -282,7 +267,7 @@ function vHabitCard(x,ds){
   let chip=d?'<span class="chip done">完成 +'+ptsOn(x,ds)+'</span>':'<span class="chip">未完成</span>';
   if((x.freq||{}).kind==='weekly'){const c=weekCount(x,ds),t=x.freq.times||1;chip+=' <span class="chip week">本週 '+c+'/'+t+'</span>'}
   const hc=esc(x.color||COLORS[0]);
-  let h='<div class="card habit" style="--hc:'+hc+'"><div class="hhead">'+ring(d?1:habitPct(x,v),hc,40,d?'<span>✓</span>':'',5)+'<div class="grow"><div class="hname">'+esc(x.name)+'</div><div class="meta">'+freqLabel(x)+(reminderLabel(x)?'・'+reminderLabel(x):'')+'</div></div><div style="margin-right:14px">'+chip+'</div></div><div style="margin-top:12px">';
+  let h='<div class="card habit" style="--hc:'+hc+'"><div class="hhead">'+ring(d?1:habitPct(x,v),hc,40,d?'<span>✓</span>':'',5)+'<div class="grow"><div class="hname">'+esc(x.name)+'</div><div class="meta">'+freqLabel(x)+'</div></div><div style="margin-right:14px">'+chip+'</div></div><div style="margin-top:12px">';
   const a='data-h="'+x.id+'"';
   switch(x.type){
     case 'check':h+='<button class="tick" data-act="check" '+a+' aria-pressed="'+(v===true)+'"><span class="o">✓</span><span>'+(v===true?'已完成<span class="meta" style="display:block;font-weight:400">再按一下可以取消</span>':'做完了就按一下')+'</span></button>';break;
@@ -399,7 +384,7 @@ function habitChart(x,daysArr,t){const c=esc(x.color);let h='<div class="card">'
 function vHabits(){
   const hs=S.cfg.habits;let h='<div class="stack"><button class="btn pri big" data-act="new">＋ 新增習慣</button>';
   if(!hs.length)return h+vStarter()+'</div>';
-  h+='<div class="stack" data-dlist="habits">';hs.forEach((x,i)=>{h+='<div class="card habit" data-ditem="'+x.id+'" style="--hc:'+esc(x.color)+'"><div class="hhead"><span class="grip" data-grip="1" aria-label="按住拖動來排序" role="button" tabindex="0"><svg width="14" height="20" viewBox="0 0 14 20" aria-hidden="true"><g fill="currentColor"><circle cx="4" cy="4" r="1.6"/><circle cx="10" cy="4" r="1.6"/><circle cx="4" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="4" cy="16" r="1.6"/><circle cx="10" cy="16" r="1.6"/></g></svg></span><span style="width:14px;height:14px;flex:none;background:'+esc(x.color)+';transform:rotate(45deg);border-radius:2px"></span><div class="grow"><div class="hname">'+esc(x.name)+'</div><div class="meta">'+freqLabel(x)+'・'+TYPES[x.type].label+'・'+(x.points||0)+' 點'+(reminderLabel(x)?'・'+reminderLabel(x):'')+'</div></div><div class="row" style="flex-wrap:nowrap;margin-right:16px"><button class="btn sm" data-act="edit" data-h="'+x.id+'">編輯</button></div></div></div>'});h+='</div>';
+  h+='<div class="stack" data-dlist="habits">';hs.forEach((x,i)=>{h+='<div class="card habit" data-ditem="'+x.id+'" style="--hc:'+esc(x.color)+'"><div class="hhead"><span class="grip" data-grip="1" aria-label="按住拖動來排序" role="button" tabindex="0"><svg width="14" height="20" viewBox="0 0 14 20" aria-hidden="true"><g fill="currentColor"><circle cx="4" cy="4" r="1.6"/><circle cx="10" cy="4" r="1.6"/><circle cx="4" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="4" cy="16" r="1.6"/><circle cx="10" cy="16" r="1.6"/></g></svg></span><span style="width:14px;height:14px;flex:none;background:'+esc(x.color)+';transform:rotate(45deg);border-radius:2px"></span><div class="grow"><div class="hname">'+esc(x.name)+'</div><div class="meta">'+freqLabel(x)+'・'+TYPES[x.type].label+'・'+(x.points||0)+' 點'+'</div></div><div class="row" style="flex-wrap:nowrap;margin-right:16px"><button class="btn sm" data-act="edit" data-h="'+x.id+'">編輯</button></div></div></div>'});h+='</div>';
   h+='<p class="hint">刪除習慣：按「編輯」，最下面有刪除。</p>';
   return h+'</div>'}
 
@@ -446,10 +431,10 @@ function vRewards(){
 
 /* ---------- edit form ---------- */
 function blankHabit(){return {id:nid(),name:'',color:COLORS[S.cfg.habits.length%COLORS.length],type:'check',freq:{kind:'daily',days:[1,2,3,4,5],times:3},
-  reminder:{mode:'none',time:'21:00',every:2,from:'10:00',to:'20:00'},points:10,options:[{label:'做到了',done:true},{label:'沒做',done:false}],
+  points:10,options:[{label:'做到了',done:true},{label:'沒做',done:false}],
   unit:'',target:'',dir:'ge',mode:'frac',denom:10,steps:'',fields:['數量'],minCount:1,labelHint:'名稱',created:today()}}
 function vEdit(){
-  const e=S.edit;const f=e.freq;const r=e.reminder;const isNew=!S.cfg.habits.some(h=>h.id===e.id);
+  const e=S.edit;const f=e.freq;const isNew=!S.cfg.habits.some(h=>h.id===e.id);
   let h='<div class="modal" data-act="bgclose"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="eh"><h2 id="eh">'+(isNew?'新增習慣':'編輯習慣')+'</h2>';
   h+='<div class="fld"><label for="e-name">名稱</label><input type="text" id="e-name" data-e="name" value="'+esc(e.name)+'" placeholder="例如：喝水"></div>';
   h+='<div class="fld"><span class="lb">顏色</span><div class="row">'+COLORS.map(c=>'<button class="sw" style="background:'+c+'" data-act="ecolor" data-v="'+c+'" aria-pressed="'+(e.color===c)+'" aria-label="顏色"></button>').join('')+'</div></div>';
@@ -480,10 +465,6 @@ function editInput(el){
     case 'minCount':e.minCount=Math.max(1,parseInt(v)||1);break;
     case 'optlabel':e.options[el.dataset.i].label=v;break;
     case 'optdone':e.options[el.dataset.i].done=el.checked;break;
-    case 'rtime':e.reminder.time=v;break;
-    case 'every':e.reminder.every=Math.max(1,parseInt(v)||1);break;
-    case 'from':e.reminder.from=v;break;
-    case 'to':e.reminder.to=v;break;
     case 'denom':e.denom=Math.max(2,Math.min(1000,parseInt(v)||10));break;
     case 'points':e.points=Math.max(0,parseInt(v)||0);break;
   }}
@@ -494,11 +475,11 @@ function template(){
   const t=today();const mk=o=>Object.assign(blankHabit(),o,{id:nid(),created:t});
   S.cfg.habits=S.cfg.habits.concat([
     mk({name:'8:00 前起床',type:'time',target:'08:00',dir:'le',color:COLORS[3],points:10}),
-    mk({name:'飲食份量',type:'list',presets:'早餐,午餐,點心,晚餐',fields:['主食','蛋白','蔬菜'],labelHint:'早餐／午餐／晚餐／點心',minCount:3,color:COLORS[0],points:15,reminder:{mode:'time',time:'22:30',every:2,from:'10:00',to:'20:00'}}),
-    mk({name:'喝水',type:'number',unit:'ml',target:2500,dir:'ge',steps:'250,473,500',color:COLORS[1],points:10,reminder:{mode:'interval',time:'21:00',every:2,from:'10:00',to:'20:00'}}),
+    mk({name:'飲食份量',type:'list',presets:'早餐,午餐,點心,晚餐',fields:['主食','蛋白','蔬菜'],labelHint:'早餐／午餐／晚餐／點心',minCount:3,color:COLORS[0],points:15}),
+    mk({name:'喝水',type:'number',unit:'ml',target:2500,dir:'ge',steps:'250,473,500',color:COLORS[1],points:10}),
     mk({name:'步數',type:'number',unit:'步',target:8000,dir:'ge',color:COLORS[5],points:10}),
-    mk({name:'運動',type:'list',presets:'跟練操,皮拉提斯,重訓,有氧,走路',fields:['時間:分鐘'],minCount:1,color:COLORS[2],points:15,reminder:{mode:'time',time:'20:00',every:2,from:'10:00',to:'20:00'}}),
-    mk({name:'記帳',type:'list',presets:'早餐,午餐,晚餐,飲料點心,交通,其他',fields:['金額'],labelHint:'花在哪裡',minCount:1,color:COLORS[4],points:5,reminder:{mode:'time',time:'22:30',every:2,from:'10:00',to:'20:00'}}),
+    mk({name:'運動',type:'list',presets:'跟練操,皮拉提斯,重訓,有氧,走路',fields:['時間:分鐘'],minCount:1,color:COLORS[2],points:15}),
+    mk({name:'記帳',type:'list',presets:'早餐,午餐,晚餐,飲料點心,交通,其他',fields:['金額'],labelHint:'花在哪裡',minCount:1,color:COLORS[4],points:5}),
     mk({name:'睡眠分數',type:'ratio',mode:'frac',denom:10,dir:'none',target:'',color:COLORS[3],points:5})
   ]);setCfg();render()}
 function rwTemplate(){S.cfg.rewards=(S.cfg.rewards||[]).concat([['看一場電影',250],['按摩',400],['新的運動服',500],['一件新衣服',600]].map(([n,c])=>({id:nid(),name:n,cost:c})));setCfg();render()}
@@ -555,7 +536,6 @@ document.addEventListener('click',ev=>{
     case 'emode':S.edit.mode=v;S.edit.target='';rerenderModal();break;
     case 'ratio':setVal(ds,hid,entries(ds)[hid]===Number(v)&&H.mode!=='pct'?null:Number(v));render();break;
     case 'eday':{const d=Number(v);const s=S.edit.freq.days||[];S.edit.freq.days=s.includes(d)?s.filter(x=>x!==d):s.concat(d);rerenderModal();break}
-    case 'erem':S.edit.reminder.mode=v;rerenderModal();break;
     case 'addopt':S.edit.options.push({label:'',done:false});rerenderModal();break;
     case 'delopt':S.edit.options.splice(Number(v),1);rerenderModal();break;
     case 'esave':{const e=S.edit;document.querySelectorAll('#modal [data-e]').forEach(el=>{if(el.dataset.e!=='type'&&el.dataset.e!=='dir')editInput(el)});

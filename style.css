@@ -185,9 +185,6 @@ button.hbar{cursor:pointer}
 .fields{display:flex;gap:6px;flex-wrap:wrap}
 .fields label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
 .fields input{width:76px}
-.remind{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 10%,var(--card))}
-.remind h2{font-size:15px;margin:0 0 4px;color:var(--gold)}
-.remind ul{margin:0;padding-left:18px}
 .datebar{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .datebar .d{font-size:20px;font-weight:900;text-align:center;flex:1}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}

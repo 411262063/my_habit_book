@@ -32,7 +32,7 @@ Firestore 路徑：集合 `data/users/{uid}`，底下每份文件：
   - `habits[]`：`{id, name, color, type, freq:{kind:'daily'|'weekdays'|'weekly', days:[0-6], times}, points, created:'YYYY-MM-DD', ...依類型的欄位}`
     - `type`：`check`／`options`／`ratio`／`number`／`time`／`text`／`list`
     - 依類型：`options:[{label,done}]`、`unit`、`target`、`dir:'ge'|'le'|'after'|'none'`、`steps`（快速加按鈕）、`mode:'frac'|'pct'`、`denom`、`fields:['名稱:單位']`、`presets`（清單標籤）、`minCount`、`labelHint`
-    - `reminder` 欄位還留在舊資料裡，功能已經拿掉了
+    - `reminder`：舊資料裡還有這個欄位。提醒功能已經拿掉，程式不再讀寫它，編輯習慣時會原樣保留，新的習慣不會有這個欄位
   - `rewards[]`：`{id, name, cost}`
   - `redeemed[]`：`{name, cost, date}`，兌換紀錄。點數餘額＝賺到的點數－這裡的 cost 加總
   - `theme`：`{accent:'teal'|…|'custom', custom:'#rrggbb', saved:[色碼], mode:''|'light'|'dark'}`
