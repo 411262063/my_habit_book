@@ -10,18 +10,57 @@
 - 資料存在 Firebase（Email／密碼登入、Firestore），連不上時退回瀏覽器的 localStorage。
 - 早期版本放在 Claude 的 artifact 上，已經**停止維護**，不用管它，也不要為了相容它而保留程式碼。
 
-## 待辦：第一次開始工作時先做這件事
+## 架構
 
-這份文件的「架構」一節還沒寫。開始處理任何需求之前，請先：
+### 檔案
 
-1. 對照目前的程式碼，在這裡補上「架構」一節：
-   - 各檔案的職責（index.html / style.css / app.js / firebase-config.js）
-   - Firebase 的資料結構：使用者設定和每天的紀錄存在哪裡、欄位長什麼樣子
-   - 確認「過去的點數是鎖住的」這條規則，目前的程式碼有沒有做到；沒有的話告訴我，先不要自己改
-   - 怎麼在本機跑起來、怎麼測試、怎麼部署
-2. 檢查這份文件其他內容有沒有跟程式碼不一致的地方，有的話告訴我。
-3. 更新 README.md，它還寫著這是單一 HTML 檔，已經過時了。
-4. 完成後把這整個「待辦」一節刪掉，換成「架構」一節，然後 commit。
+- `index.html`：外框，只有標題、點數六角形、同步狀態列、五個分頁按鈕（今天／月曆／習慣／獎勵／設定），以及 `#view`、`#modal` 兩個容器。內容全部由 `app.js` 產生。
+- `style.css`：全部樣式。`:root` 定義顏色與字體變數，深色模式用 `prefers-color-scheme` 或 `:root[data-theme="dark"]` 覆寫。主題色由 `app.js` 的 `applyTheme()` 在執行時改寫 `--accent`／`--good`／`--accent-ink`。
+- `app.js`：所有程式邏輯，以 `<script type="module">` 載入，從 gstatic CDN 匯入 Firebase SDK 13.4.0（app／auth／firestore）。大致分段：
+  - storage：Firebase 初始化、登入狀態、`onSnapshot` 讀取、`save()`／`writeDoc()` 防抖寫入、localStorage 退路
+  - logic：`scheduled()`（這天有沒有排）、`isDone()`（依類型判斷完成）、`doneOn()`／`ptsOn()`（先讀鎖定結果）、`earned()`／`spent()`／`balance()`、`migrate()`
+  - render：`render()` 依 `S.view` 整頁重畫 `#view`，`vToday`／`vCal`／`vHabits`／`vRewards`／`vSettings`、編輯表單 `vEdit`、計算機 `vCalc`
+  - events：在 `document` 上統一處理 `click`（`data-act`）、`input`／`change`（`data-in`、`data-e`、`data-au`）、`keydown`，拖拉排序用 pointer 事件
+  - 全域狀態都在 `S`：`S.cfg`（設定）、`S.days`（每天的紀錄）、`S.mode`（`loading`／`auth`／`cloud`／`local`），其他是畫面暫存狀態
+- `firebase-config.js`：匯出 `firebaseConfig`（Firebase 網頁應用程式設定，不是密碼）。
+
+### 資料結構
+
+Firestore 路徑：集合 `data/users/{uid}`，底下每份文件：
+
+- `config`：使用者設定，整份覆寫
+  - `habits[]`：`{id, name, color, type, freq:{kind:'daily'|'weekdays'|'weekly', days:[0-6], times}, points, created:'YYYY-MM-DD', ...依類型的欄位}`
+    - `type`：`check`／`options`／`ratio`／`number`／`time`／`text`／`list`
+    - 依類型：`options:[{label,done}]`、`unit`、`target`、`dir:'ge'|'le'|'after'|'none'`、`steps`（快速加按鈕）、`mode:'frac'|'pct'`、`denom`、`fields:['名稱:單位']`、`presets`（清單標籤）、`minCount`、`labelHint`
+    - `reminder` 欄位還留在舊資料裡，功能已經拿掉了
+  - `rewards[]`：`{id, name, cost}`
+  - `redeemed[]`：`{name, cost, date}`，兌換紀錄。點數餘額＝賺到的點數－這裡的 cost 加總
+  - `theme`：`{accent:'teal'|…|'custom', custom:'#rrggbb', saved:[色碼], mode:''|'light'|'dark'}`
+  - `goals`：`{'YYYY-MM': 月目標文字}`
+  - `mig`：已經跑過的資料轉換旗標，目前只有 `ex:1`（把「跟練操」改成「運動」清單）
+  - `rwSort`：`'custom'|'asc'|'desc'`
+  - `lastBackup`：上次手動下載備份的 ISO 時間
+- `d-YYYY-MM-DD`：一天一份，`{date:'YYYY-MM-DD', e:{...}}`
+  - `e[habitId]`：當天的值。check＝`true`，options＝選項索引，number／ratio＝數字，time＝`'HH:MM'`，text＝字串，list＝`[{label, tag?, f:[數字...]}]`
+  - `e.__r[habitId]`：**鎖定的結果** `{d: 是否完成, p: 得到的點數}`，每次改值時由 `relock()` 依當下的習慣設定寫入
+  - `e.__log[habitId]`：數字類型當天每次加減的紀錄 `[{t:'HH:MM', a: 增減量, set?: 設定值}]`，用來顯示和復原
+
+localStorage（連不到 Firebase 時）：key `habit-book-v1`，內容是 `{cfg, days}`，`days` 的格式跟上面的 `e` 一樣。
+
+備份檔：`{app:'habit-book', v:1, exported, cfg, days}`。
+
+### 點數鎖定
+
+- 已做到：每次改某天的值，`relock()` 就把當下的完成結果和點數寫進 `__r`。`doneOn()`、`ptsOn()`、`earned()` 都優先讀 `__r`，所以之後改目標、點數，過去有 `__r` 的紀錄不會變。編輯習慣存檔前和刪除習慣前，`lockUnlocked()` 會先用**舊的**設定幫沒有 `__r` 的紀錄補鎖。
+- 還有的缺口（已回報，還沒修）：
+  1. 回到過去某天修改那天的值，會用**現在的**目標和點數重新鎖定那天，所以那天已經賺到的點數可能變多或變少。
+  2. 編輯存檔時今天會依新設定重鎖，今天的點數會跟著改。今天應該不算「過去」，所以這可能是刻意的。
+
+### 本機執行、測試、部署
+
+- 本機執行：`app.js` 是 ES module，直接用 `file://` 開不起來，要開本機伺服器，例如在專案資料夾執行 `python -m http.server 8000`，再開 http://localhost:8000 。連的是正式的 Firebase 專案，登入後讀寫的是真實資料，測試時請用另一個帳號。
+- 測試：沒有自動化測試。用瀏覽器開發者工具切到手機寬度（約 375px），淺色和深色模式都手動看過。
+- 部署：GitHub Pages，`main` 分支的根目錄（repo `411262063/my_habit_book`），push 之後一兩分鐘生效。Firestore 安全規則在 Firebase Console 設定，內容見 README。
 
 ## 一定要遵守的規則
 
