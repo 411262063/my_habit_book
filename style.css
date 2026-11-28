@@ -1,4 +1,4 @@
-/* Layout: one narrow column, phone first. Header with points, tab bar, cards per habit. */
+/* 版面：一欄，最寬 560px，手機和電腦共用同一份。上方是標題和點數，接著是分頁列，每個習慣一張卡片。 */
 :root{
   --bg:#EEF2F1;
   --card:#FFFFFF;

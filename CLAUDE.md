@@ -4,7 +4,7 @@
 
 ## 專案是什麼
 
-習慣打卡本：我自己用的習慣追蹤網頁 app，手機優先。每天記錄習慣，看月曆和圖表，完成習慣累積點數，再用點數兌換自己設定的獎勵。
+習慣打卡本：我自己用的習慣追蹤網頁 app。手機和電腦打開的是同一份網頁，只是視窗寬度不同，兩邊一樣重要。每天記錄習慣，看月曆和圖表，完成習慣累積點數，再用點數兌換自己設定的獎勵。
 
 - 純 HTML、CSS、JavaScript，沒有建置步驟。
 - 資料存在 Firebase（Email／密碼登入、Firestore），連不上時退回瀏覽器的 localStorage。
@@ -60,7 +60,7 @@ localStorage（連不到 Firebase 時）：key `habit-book-v1`，內容是 `{cfg
 ### 本機執行、測試、部署
 
 - 本機執行：`app.js` 是 ES module，直接用 `file://` 開不起來，要開本機伺服器，例如在專案資料夾執行 `python -m http.server 8000`，再開 http://localhost:8000 。連的是正式的 Firebase 專案，登入後讀寫的是真實資料，測試時請用另一個帳號。
-- 測試：沒有自動化測試。這台電腦沒有 Node，也沒有能用的 Python。要驗證程式邏輯，可以用 headless Chrome 跑 `app.js`：把 `import` 那幾行換成假的 Firebase，資料只放在記憶體裡，不會碰到真實資料。畫面由我自己在手機上看。
+- 測試：沒有自動化測試。這台電腦沒有 Node，也沒有能用的 Python。要驗證程式邏輯，可以用 headless Chrome 跑 `app.js`：把 `import` 那幾行換成假的 Firebase，資料只放在記憶體裡，不會碰到真實資料。畫面由我自己看。
 - 部署：GitHub Pages，`main` 分支的根目錄（repo `411262063/my_habit_book`），push 之後一兩分鐘生效。Firestore 安全規則在 Firebase Console 設定，內容見 README。
 
 ## 一定要遵守的規則
@@ -87,7 +87,8 @@ localStorage（連不到 Firebase 時）：key `habit-book-v1`，內容是 `{cfg
 
 ### 改完之後
 
-- 不用截圖檢查畫面。有改到畫面的話，在回報裡說明改了哪些畫面，由我自己在手機上看。
+- 不用截圖檢查畫面。有改到畫面的話，在回報裡說明改了哪些畫面，由我自己看。不要特別指定用手機或電腦看。
+- push 之後，瀏覽器可能還在用快取的舊檔（GitHub Pages 快取 10 分鐘），要提醒我按 Ctrl + F5 強制重新整理。
 - 說清楚改了什麼、怎麼確認的、有沒有還沒測到的地方。
 
 ### Git
