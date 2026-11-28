@@ -207,8 +207,7 @@ function habitPct(h,v){if(h.type==='ratio'&&typeof v==='number')return v/ratioMa
 const FIELD_UNIT={'主食':'拳','蛋白':'掌心','蛋白質':'掌心','蔬菜':'拳','金額':'元'};
 function fName(f){return String(f).split(/[:：]/)[0].trim()}
 function fUnit(f){const p=String(f).split(/[:：]/);return p.length>1?p[1].trim():(FIELD_UNIT[p[0].trim()]||'')}
-function labelPh(h){if((h.fields||[]).some(f=>fName(f)==='主食'))return '吃了什麼';return '內容';const fromHint=h.presets==null&&String(h.labelHint||'').split(/[／\/、]/).filter(Boolean).length>1;
-  if(fromHint||presetsOf(h).length)return (h.fields||[]).some(f=>fName(f)==='主食')?'吃了什麼，例如：雞肉飯＋燙青菜':(fromHint?'內容':(h.labelHint||'內容'));return h.labelHint||'名稱'}
+function labelPh(h){return (h.fields||[]).some(f=>fName(f)==='主食')?'吃了什麼':'內容'}
 function presetsOf(h){if(h.presets!=null&&String(h.presets).trim()!=='')return String(h.presets).split(/[,，、／\/]/).map(s=>s.trim()).filter(Boolean);if(h.presets==null){const l=String(h.labelHint||'').split(/[／\/、]/).map(s=>s.trim()).filter(Boolean);if(l.length>1)return l}return []}
 function listSums(h,v){const n=(h.fields||[]).length;const s=new Array(n).fill(0);(v||[]).forEach(r=>(r.f||[]).forEach((x,i)=>{if(i<n)s[i]+=Number(x)||0}));return s}
 
@@ -503,14 +502,7 @@ document.addEventListener('click',ev=>{
       const cur=entries(ds)[c.hid];const cv=typeof cur==='number'?cur:0;const n=new Date();const tm=pad(n.getHours())+':'+pad(n.getMinutes());
       if(r!==cv||typeof cur!=='number'){const ent={t:tm,a:fmt(r-cv)};const CH=S.cfg.habits.find(q=>q.id===c.hid)||{};if(c.cleared||typeof cur!=='number'&&!CH.steps)ent.set=r;setLog(ds,c.hid,logOf(ds,c.hid).concat(ent))}
       setVal(ds,c.hid,r);S.calc=null;render();break}
-    case 'custom':S.custom=S.custom===hid?null:hid;render();if(S.custom){const el=document.getElementById('n-'+hid);el&&el.focus()}break;
     case 'dellog':{const cur=entries(ds)[hid];const c=typeof cur==='number'?cur:0;const lg=logOf(ds,hid).slice();let sub=0;if(v==='pre'){sub=c-lg.reduce((q,r)=>q+(Number(r.a)||0),0)}else{sub=Number(lg[Number(v)].a)||0;lg.splice(Number(v),1);setLog(ds,hid,lg)}const r=fmt(c-sub);setVal(ds,hid,r>0?r:(lg.length?0:null));render();break}
-    case 'calc':{const raw=String((S.drafts[hid]||{}).n||'').replace(/[，,\s]/g,'');let n=null;
-      if(/^[-+]?\d*\.?\d+([+\-*/][-+]?\d*\.?\d+)*$/.test(raw)){try{n=Function('return ('+raw+')')()}catch(e){n=null}}
-      const el=document.getElementById('n-'+hid);if(n==null||!isFinite(n)){if(el){el.focus();el.placeholder='請輸入數字，例如 300'}break}
-      const cur=entries(ds)[hid];const c=typeof cur==='number'?cur:0;let r=v==='add'?c+n:v==='sub'?c-n:n;r=Math.max(0,fmt(r));
-      if(v==='add'){const d=new Date();setLog(ds,hid,logOf(ds,hid).concat({t:pad(d.getHours())+':'+pad(d.getMinutes()),a:n}));S.custom=null}
-      setVal(ds,hid,r);S.drafts[hid]={};render();break}
     case 'clear':setVal(ds,hid,null);render();break;
     case 'now':{const n=new Date();setVal(ds,hid,pad(n.getHours())+':'+pad(n.getMinutes()));render();break}
     case 'addrow':{const dr=S.drafts[hid]||{};const fl=H.fields||[];const f=fl.map((_,j)=>Number((dr.f||[])[j])||0);
@@ -518,7 +510,6 @@ document.addEventListener('click',ev=>{
       const rows=Array.isArray(entries(ds)[hid])?entries(ds)[hid].slice():[];const row={label:(dr.label||'').trim(),f};if(dr.tag)row.tag=dr.tag;
       if(S.rowEdit&&S.rowEdit.hid===hid&&rows[S.rowEdit.i])rows[S.rowEdit.i]=row;else rows.push(row);
       S.rowEdit=null;setVal(ds,hid,rows);S.drafts[hid]={};render();break}
-    case 'preset':{const d=(S.drafts[hid]=S.drafts[hid]||{});d.tag=d.tag===v?'':v;render();break}
     case 'editrow':{const r=(entries(ds)[hid]||[])[Number(v)];if(!r)break;S.rowEdit={hid,i:Number(v)};S.drafts[hid]={label:r.label,tag:r.tag||'',f:(r.f||[]).map(String)};render();break}
     case 'rowup':case 'rowdown':{const i=Number(v),j=act==='rowup'?i-1:i+1;const rows=(entries(ds)[hid]||[]).slice();if(j<0||j>=rows.length)break;[rows[i],rows[j]]=[rows[j],rows[i]];if(S.rowEdit&&S.rowEdit.hid===hid){if(S.rowEdit.i===i)S.rowEdit.i=j;else if(S.rowEdit.i===j)S.rowEdit.i=i}setVal(ds,hid,rows);render();break}
     case 'rowcancel':S.rowEdit=null;S.drafts[hid]={};render();break;
@@ -529,7 +520,6 @@ document.addEventListener('click',ev=>{
     case 'rwtemplate':rwTemplate();break;
     case 'new':S.edit=blankHabit();S.confirm=null;render();break;
     case 'edit':S.edit=JSON.parse(JSON.stringify(Object.assign(blankHabit(),H)));S.confirm=null;render();break;
-    case 'up':case 'down':{const i=Number(v),j=act==='up'?i-1:i+1;const a=S.cfg.habits;if(j<0||j>=a.length)break;[a[i],a[j]]=[a[j],a[i]];setCfg();render();break}
     case 'ecolor':S.edit.color=v;rerenderModal();break;
     case 'efreq':S.edit.freq.kind=v;rerenderModal();break;
     case 'emode':S.edit.mode=v;S.edit.target='';rerenderModal();break;
@@ -601,13 +591,11 @@ document.addEventListener('input',ev=>{
   if(k==='dlabel'){(S.drafts[hid]=S.drafts[hid]||{}).label=el.value;return}
   if(k==='mgoal'){S.cfg.goals=Object.assign({},S.cfg.goals,{[S.calMonth]:el.value});setCfg();return}
   if(k==='bkname'){S.bkName=el.value;return}
-  if(k==='numdraft'){(S.drafts[hid]=S.drafts[hid]||{}).n=el.value;return}
   if(k==='dtag'){(S.drafts[hid]=S.drafts[hid]||{}).tag=el.value;return}
   if(k==='dfield'){const d=(S.drafts[hid]=S.drafts[hid]||{});d.f=d.f||[];d.f[el.dataset.j]=el.value;return}
 });
 document.addEventListener('change',ev=>{
   const el=ev.target;if(el.dataset.e)return;const hid=el.dataset.h;const k=el.dataset.in;
-  if(k==='num'){const n=el.value===''?null:Number(el.value);setVal(S.date,hid,n===null||isNaN(n)?null:n);renderSoon()}
   if(k==='time'){setVal(S.date,hid,el.value||null);renderSoon()}
   if(k==='text'){renderSoon()}
   if(k==='ratio'){setVal(S.date,hid,Number(el.value));renderSoon()}
@@ -621,7 +609,6 @@ document.addEventListener('keydown',ev=>{
   if(ev.key==='Escape'&&S.edit){S.edit=null;S.confirm=null;render()}
   if(S.calc){const k=ev.key;const map={'*':'×','/':'÷','-':'−','+':'+',Backspace:'back',Delete:'C'};if(/^[0-9.]$/.test(k)){calcKey(k);ev.preventDefault()}else if(map[k]){calcKey(map[k]);ev.preventDefault()}else if(k==='Enter'||k==='='){const b=document.querySelector('[data-act="calcok"]');b&&b.click();ev.preventDefault()}else if(k==='Escape'){S.calc=null;render()}return}
   if(ev.key==='Enter'&&ev.target.dataset&&(ev.target.dataset.in==='dfield'||ev.target.dataset.in==='dlabel')){ev.preventDefault();const b=document.querySelector('[data-act="addrow"][data-h="'+ev.target.dataset.h+'"]');b&&b.click()}
-  if(ev.key==='Enter'&&ev.target.dataset&&ev.target.dataset.in==='numdraft'){ev.preventDefault();const b=document.querySelector('[data-act="calc"][data-h="'+ev.target.dataset.h+'"]');b&&b.click()}
   if(ev.key==='Enter'&&ev.target.dataset&&ev.target.dataset.au){ev.preventDefault();const b=document.querySelector('#view [data-act^="auth"]:not([data-act="authview"])');b&&b.click()}
 });
 init();
