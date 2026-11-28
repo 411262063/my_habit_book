@@ -25,8 +25,9 @@ function applyTheme(){const t=S.cfg.theme||{};const r=document.documentElement;
   if(t.mode==='light'||t.mode==='dark')r.setAttribute('data-theme',t.mode);else r.removeAttribute('data-theme');
   const a=r.getAttribute('data-theme');const dark=a==='dark'||(a!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);
   const th=themeColors(t);const ac=dark?th.d:th.l;r.style.setProperty('--accent',ac);r.style.setProperty('--good',ac);
-  const dk=t.accent==='custom'&&t.ink==='dark';r.style.setProperty('--accent-ink',dk?'var(--ink-on-bright)':'var(--ink-on-deep)');r.style.setProperty('--accent-fill',fillFor(ac,dk?INK_DARK:'#FFFFFF'))}
-/* 按鈕文字顏色：內建主題色一律白字；自訂主題色可以選白色（ink 沒設或 'white'）或深色（ink:'dark'），淺色、深色模式用同一個 */
+  const dk=t.accent==='custom'&&t.ink==='dark';r.style.setProperty('--accent-ink',dk?'var(--ink-on-bright)':'var(--ink-on-deep)');r.style.setProperty('--accent-fill',t.accent==='custom'?ac:fillFor(ac,'#FFFFFF'))}
+/* 按鈕文字顏色：內建主題色一律白字，按鈕底色會調到白字看得清楚；
+   自訂主題色可以選白色（ink 沒設或 'white'）或深色（ink:'dark'），淺色、深色模式用同一個，按鈕底色就是選的顏色，不另外調整 */
 const INK_DARK='#101614';/* 跟 style.css 的 --ink-on-bright 一樣 */
 /* 按鈕底色：字看不清楚時，白字就把底色一點一點加黑、深色字就加白，直到對比到 4.5 */
 function fillFor(c,ink){if(!/^#[0-9a-f]{6}$/i.test(c||''))return c;const li=lum(ink),to=li>.5?'#000000':'#FFFFFF';
@@ -401,7 +402,7 @@ function customPanel(t){const c=t.custom||'#23756A';HSV=rgb2hsv(...hex2rgb(c));c
   '<div class="huebar" id="hueBar"><span class="knob" id="hueKnob" style="left:'+(h/360*100)+'%;background:hsl('+h+',100%,50%)"></span></div>'+
   '<div class="row" style="flex-wrap:nowrap;gap:10px"><span id="cPrev" class="cprev" style="background:'+c+'"></span><label class="group" for="cHexIn" style="display:flex;flex-direction:column;gap:2px">色碼<input type="text" id="cHexIn" data-in="hexin" value="'+c.toUpperCase()+'" maxlength="7" style="width:96px;font-variant-numeric:tabular-nums" autocomplete="off" spellcheck="false"></label><button class="btn pri sm" data-act="savecolor" style="margin-left:auto;white-space:nowrap">儲存顏色</button></div>'+
   '<div class="fld" style="margin:0"><span class="lb">按鈕文字</span><div class="row" style="gap:10px"><div class="seg">'+[['white','白色'],['dark','深色']].map(([k,n])=>'<button data-act="tink" data-v="'+k+'" aria-pressed="'+((t.ink==='dark'?'dark':'white')===k)+'">'+n+'</button>').join('')+'</div><span class="meta">預覽</span><span class="btn pri sm" aria-hidden="true">記錄</span></div></div>'+
-  '<span class="group">太淺的顏色在淺色模式會自動調深一點，太深的顏色在深色模式會自動調亮一點。按鈕的底色也會照文字顏色微調，讓字看得清楚。</span></div>'}
+  '<span class="group">太淺的顏色在淺色模式會自動調深一點，太深的顏色在深色模式會自動調亮一點。按鈕會用這個顏色當底，字看不清楚的話，換一個按鈕文字顏色。</span></div>'}
 function syncCustom(hex,fromHsv){S.cfg.theme=Object.assign({},S.cfg.theme,{accent:'custom',custom:hex});applyTheme();
   if(!fromHsv)HSV=rgb2hsv(...hex2rgb(hex));const [h,sa,v]=HSV;
   const pv=$('#cPrev');if(pv)pv.style.background=hex;const hi=$('#cHexIn');if(hi&&hi!==document.activeElement)hi.value=hex.toUpperCase();
