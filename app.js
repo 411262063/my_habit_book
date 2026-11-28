@@ -24,11 +24,13 @@ function themeColors(t){if(t.accent==='custom'&&/^#[0-9a-f]{6}$/i.test(t.custom|
 function applyTheme(){const t=S.cfg.theme||{};const r=document.documentElement;
   if(t.mode==='light'||t.mode==='dark')r.setAttribute('data-theme',t.mode);else r.removeAttribute('data-theme');
   const a=r.getAttribute('data-theme');const dark=a==='dark'||(a!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);
-  const th=themeColors(t);const ac=dark?th.d:th.l;r.style.setProperty('--accent',ac);r.style.setProperty('--good',ac);r.style.setProperty('--accent-ink',inkOn(ac))}
-/* 彩色底上的字要用深色還是白色：選對比比較高的那個（底色亮度約 0.195 以上用深色字） */
-function inkOn(c){if(!/^#[0-9a-f]{6}$/i.test(c||''))return 'var(--accent-ink)';return lum(c)>.195?'var(--ink-on-bright)':'var(--ink-on-deep)'}
-/* 習慣顏色當底、上面放白字時用：太亮的顏色（例如橘、綠）一點一點加黑，直到白字的對比到 4.5 */
-function deepen(c){if(!/^#[0-9a-f]{6}$/i.test(c||''))return c;let x=c,t=0;while(1.05/(lum(x)+.05)<4.5&&t<.6){t=Math.round((t+.05)*100)/100;x=mixHex(c,'#000000',t)}return x}
+  const th=themeColors(t);const ac=dark?th.d:th.l;r.style.setProperty('--accent',ac);r.style.setProperty('--good',ac);
+  const dk=t.accent==='custom'&&t.ink==='dark';r.style.setProperty('--accent-ink',dk?'var(--ink-on-bright)':'var(--ink-on-deep)');r.style.setProperty('--accent-fill',fillFor(ac,dk?INK_DARK:'#FFFFFF'))}
+/* 按鈕文字顏色：內建主題色一律白字；自訂主題色可以選白色（ink 沒設或 'white'）或深色（ink:'dark'），淺色、深色模式用同一個 */
+const INK_DARK='#101614';/* 跟 style.css 的 --ink-on-bright 一樣 */
+/* 按鈕底色：字看不清楚時，白字就把底色一點一點加黑、深色字就加白，直到對比到 4.5 */
+function fillFor(c,ink){if(!/^#[0-9a-f]{6}$/i.test(c||''))return c;const li=lum(ink),to=li>.5?'#000000':'#FFFFFF';
+  const cr=x=>{const a=lum(x);return (Math.max(a,li)+.05)/(Math.min(a,li)+.05)};let x=c,t=0;while(cr(x)<4.5&&t<.9){t=Math.round((t+.05)*100)/100;x=mixHex(c,to,t)}return x}
 try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>applyTheme())}catch(e){}
 const TYPES={
   check:{label:'打勾',group:'pre',desc:'做了就按一下'},
@@ -202,7 +204,7 @@ document.addEventListener('keydown',ev=>{const g=ev.target.closest&&ev.target.cl
   if(key==='habits')S.cfg.habits=arr;else S.cfg.rewards=arr;setCfg();render();const ng=document.querySelector('[data-ditem="'+item.dataset.ditem+'"] [data-grip]');ng&&ng.focus()});
 function logOf(ds,hid){const e=S.days[ds]||{};return ((e.__log||{})[hid])||[]}
 function setLog(ds,hid,arr){const e=entries(ds);e.__log=Object.assign({},e.__log||{});if(arr&&arr.length)e.__log[hid]=arr;else delete e.__log[hid]}
-function ring(pct,color,size,inner,th){const p=Math.max(0,Math.min(1,pct||0));return '<span class="ring'+(p>=1&&inner&&inner.indexOf('✓')>=0?' full':'')+'" style="--p:'+Math.round(p*100)+';--rc:'+color+';--rf:'+deepen(color)+';--sz:'+size+'px;--th:'+(th||5)+'px">'+(inner||'')+'</span>'}
+function ring(pct,color,size,inner,th){const p=Math.max(0,Math.min(1,pct||0));return '<span class="ring'+(p>=1&&inner&&inner.indexOf('✓')>=0?' full':'')+'" style="--p:'+Math.round(p*100)+';--rc:'+color+';--sz:'+size+'px;--th:'+(th||5)+'px">'+(inner||'')+'</span>'}
 function ratioMax(h){return h.mode==='pct'?100:Math.max(2,Math.min(1000,Number(h.denom)||10))}
 function ratioTxt(h,v){return h.mode==='pct'?fmt(v)+'%':fmt(v)+' / '+ratioMax(h)}
 function habitPct(h,v){if(h.type==='ratio'&&typeof v==='number')return v/ratioMax(h);if(h.type==='number'&&typeof v==='number'&&h.dir==='ge'&&h.target)return v/h.target;if(h.type==='list'&&Array.isArray(v))return v.length/(h.minCount||1);return 0}
@@ -267,7 +269,7 @@ function vHabitCard(x,ds){
   let chip=d?'<span class="chip done">完成 +'+ptsOn(x,ds)+'</span>':'<span class="chip">未完成</span>';
   if((x.freq||{}).kind==='weekly'){const c=weekCount(x,ds),t=x.freq.times||1;chip+=' <span class="chip week">本週 '+c+'/'+t+'</span>'}
   const hc=esc(x.color||COLORS[0]);
-  let h='<div class="card habit" style="--hc:'+hc+';--hc-fill:'+deepen(x.color||COLORS[0])+';--hc-ink:var(--ink-on-deep)"><div class="hhead">'+ring(d?1:habitPct(x,v),hc,40,d?'<span>✓</span>':'',5)+'<div class="grow"><div class="hname">'+esc(x.name)+'</div><div class="meta">'+freqLabel(x)+'</div></div><div style="margin-right:14px">'+chip+'</div></div><div style="margin-top:12px">';
+  let h='<div class="card habit" style="--hc:'+hc+';--hc-ink:var(--ink-on-deep)"><div class="hhead">'+ring(d?1:habitPct(x,v),hc,40,d?'<span>✓</span>':'',5)+'<div class="grow"><div class="hname">'+esc(x.name)+'</div><div class="meta">'+freqLabel(x)+'</div></div><div style="margin-right:14px">'+chip+'</div></div><div style="margin-top:12px">';
   const a='data-h="'+x.id+'"';
   switch(x.type){
     case 'check':h+='<button class="tick" data-act="check" '+a+' aria-pressed="'+(v===true)+'"><span class="o">✓</span><span>'+(v===true?'已完成<span class="meta" style="display:block;font-weight:400">再按一下可以取消</span>':'做完了就按一下')+'</span></button>';break;
@@ -319,7 +321,7 @@ function vCal(){
   let sumD=0,sumT=0,doneDays=0,schedDays=0,run=0,best=0;
   for(let d=1;d<=days;d++){
     const ds=y+'-'+pad(m)+'-'+pad(d);const fut=ds>t;let style='',inner='<span class="n">'+d+'</span>';
-    if(!one){const r=dayRatio(ds);if(!fut&&r.t){sumD+=r.d;sumT+=r.t;const p=r.d/r.t;style='background:color-mix(in srgb,var(--accent) '+Math.round(p*85)+'%,var(--card));'+(p>.55?'color:var(--accent-ink)':'');inner+='<span class="s" style="'+(p>.55?'color:inherit':'')+'">'+r.d+'/'+r.t+'</span>'}}
+    if(!one){const r=dayRatio(ds);if(!fut&&r.t){sumD+=r.d;sumT+=r.t;const p=r.d/r.t;style='background:color-mix(in srgb,var(--accent-fill) '+Math.round(p*85)+'%,var(--card));'+(p>.55?'color:var(--accent-ink)':'');inner+='<span class="s" style="'+(p>.55?'color:inherit':'')+'">'+r.d+'/'+r.t+'</span>'}}
     else{const sc=scheduled(one,ds);const dn=doneOn(one,ds);
       if(!fut&&sc){schedDays++;if(dn){doneDays++;run++;best=Math.max(best,run)}else if(ds!==t)run=0}
       if(dn)inner+='<span class="dot" style="background:'+esc(one.color)+'"></span>';
@@ -398,8 +400,8 @@ function customPanel(t){const c=t.custom||'#23756A';HSV=rgb2hsv(...hex2rgb(c));c
   '<div class="svbox" id="svBox" style="background-color:hsl('+h+',100%,50%)"><span class="knob" id="svKnob" style="left:'+(sa*100)+'%;top:'+((1-v)*100)+'%;background:'+c+'"></span></div>'+
   '<div class="huebar" id="hueBar"><span class="knob" id="hueKnob" style="left:'+(h/360*100)+'%;background:hsl('+h+',100%,50%)"></span></div>'+
   '<div class="row" style="flex-wrap:nowrap;gap:10px"><span id="cPrev" class="cprev" style="background:'+c+'"></span><label class="group" for="cHexIn" style="display:flex;flex-direction:column;gap:2px">色碼<input type="text" id="cHexIn" data-in="hexin" value="'+c.toUpperCase()+'" maxlength="7" style="width:96px;font-variant-numeric:tabular-nums" autocomplete="off" spellcheck="false"></label><button class="btn pri sm" data-act="savecolor" style="margin-left:auto;white-space:nowrap">儲存顏色</button></div>'+'<div class="row" style="justify-content:flex-end"><button class="btn sm" data-act="picker">收起檢色器</button></div>'+
-  
-  '<span class="group">太淺的顏色在淺色模式會自動調深一點，太深的顏色在深色模式會自動調亮一點，讓字看得清楚。</span></div>'}
+  '<div class="fld" style="margin:0"><span class="lb">按鈕文字</span><div class="row" style="gap:10px"><div class="seg">'+[['white','白色'],['dark','深色']].map(([k,n])=>'<button data-act="tink" data-v="'+k+'" aria-pressed="'+((t.ink==='dark'?'dark':'white')===k)+'">'+n+'</button>').join('')+'</div><span class="meta">預覽</span><span class="btn pri sm" aria-hidden="true">記錄</span></div></div>'+
+  '<span class="group">太淺的顏色在淺色模式會自動調深一點，太深的顏色在深色模式會自動調亮一點。按鈕的底色也會照文字顏色微調，讓字看得清楚。</span></div>'}
 function syncCustom(hex,fromHsv){S.cfg.theme=Object.assign({},S.cfg.theme,{accent:'custom',custom:hex});applyTheme();
   if(!fromHsv)HSV=rgb2hsv(...hex2rgb(hex));const [h,sa,v]=HSV;
   const pv=$('#cPrev');if(pv)pv.style.background=hex;const hi=$('#cHexIn');if(hi&&hi!==document.activeElement)hi.value=hex.toUpperCase();
@@ -549,6 +551,7 @@ document.addEventListener('click',ev=>{
     case 'picker':S.showPicker=!S.showPicker;render();break;
     case 'taccent':if(v==='custom'){if(S.showPicker){S.showPicker=false;render();break}S.showPicker=true}else S.showPicker=false;S.cfg.theme=Object.assign({},S.cfg.theme,{accent:v});if(v==='custom'&&!S.cfg.theme.custom){const r=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();S.cfg.theme.custom=/^#[0-9a-f]{6}$/i.test(r)?r:'#23756A'}setCfg();render();break;
     case 'tmode':S.cfg.theme=Object.assign({},S.cfg.theme,{mode:v});setCfg();render();break;
+    case 'tink':S.cfg.theme=Object.assign({},S.cfg.theme,{ink:v});setCfg();render();break;
     case 'backup':{try{const data=JSON.stringify({app:'habit-book',v:1,exported:new Date().toISOString(),cfg:S.cfg,days:S.days});
         let nm=String(S.bkName??('習慣打卡本備份-'+today())).replace(/\.json$/i,'').replace(/[\\/:*?"<>|]/g,'-').trim()||('習慣打卡本備份-'+today());
         const blob=new Blob([data],{type:'application/json'});const u=URL.createObjectURL(blob);

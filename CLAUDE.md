@@ -35,7 +35,7 @@ Firestore 路徑：集合 `data/users/{uid}`，底下每份文件：
     - `reminder`：舊資料裡還有這個欄位。提醒功能已經拿掉，程式不再讀寫它，編輯習慣時會原樣保留，新的習慣不會有這個欄位
   - `rewards[]`：`{id, name, cost}`
   - `redeemed[]`：`{name, cost, date}`，兌換紀錄。點數餘額＝賺到的點數－這裡的 cost 加總
-  - `theme`：`{accent:'teal'|…|'custom', custom:'#rrggbb', saved:[色碼], mode:''|'light'|'dark'}`
+  - `theme`：`{accent:'teal'|…|'custom', custom:'#rrggbb', saved:[色碼], mode:''|'light'|'dark', ink?:'white'|'dark'}`。`ink` 是自訂主題色的按鈕文字顏色，沒有這個欄位就當白色
   - `goals`：`{'YYYY-MM': 月目標文字}`
   - `mig`：已經跑過的資料轉換旗標，目前只有 `ex:1`（把「跟練操」改成「運動」清單）
   - `rwSort`：`'custom'|'asc'|'desc'`
@@ -100,9 +100,9 @@ localStorage（連不到 Firebase 時）：key `habit-book-v1`，內容是 `{cfg
 
 - 顏色和字體一律用 `style.css` 裡 `:root` 定義的變數，不要寫死顏色。主題色是使用者可以自己換的，寫死的顏色會跟主題色打架。
 - 彩色底上的文字不要寫死白色，改用變數：
-  - 主題色底用 `--accent-ink`，由 `inkOn()` 依主題色亮度選深色或白色字。
-  - 點數六角形用白字 `--gold-ink`，底色用比 `--gold` 深的 `--gold-fill`。
-  - 習慣顏色底（打勾圈、選項、比例圓點、完成的圓環）一律用白字 `--hc-ink`，底色用 `deepen()` 調深過的 `--hc-fill`／`--rf`，太亮的習慣顏色會自動加黑到白字看得清楚。我不喜歡彩色底上放黑字。
+  - 主題色按鈕：底色用 `--accent-fill`、字用 `--accent-ink`。內建主題色一律白字；自訂主題色可以在檢色器裡選白色或深色字（`theme.ink`），淺色、深色模式用同一個。`fillFor()` 會把按鈕底色調深或調亮到字的對比有 4.5。只有放字的底用 `--accent-fill`，線條、圓環、文字色還是用 `--accent`。
+  - 點數六角形：`--gold` 底配白字 `--gold-ink`。
+  - 習慣顏色（打勾圈、選項、比例圓點、完成的圓環）：習慣顏色底配白字 `--hc-ink`，不調整底色。
 - 介面會刻意用不同的幾何形狀，例如六角形的點數、圓環進度、票券形的獎勵、圓形的日期，不要全部改回圓角矩形。
 
 <!-- 設計風格之後會搭配一些 plugin 再調整，到時候再更新這一節。 -->
