@@ -399,7 +399,7 @@ function customPanel(t){const c=t.custom||'#23756A';HSV=rgb2hsv(...hex2rgb(c));c
   return '<div class="cpanel">'+
   '<div class="svbox" id="svBox" style="background-color:hsl('+h+',100%,50%)"><span class="knob" id="svKnob" style="left:'+(sa*100)+'%;top:'+((1-v)*100)+'%;background:'+c+'"></span></div>'+
   '<div class="huebar" id="hueBar"><span class="knob" id="hueKnob" style="left:'+(h/360*100)+'%;background:hsl('+h+',100%,50%)"></span></div>'+
-  '<div class="row" style="flex-wrap:nowrap;gap:10px"><span id="cPrev" class="cprev" style="background:'+c+'"></span><label class="group" for="cHexIn" style="display:flex;flex-direction:column;gap:2px">色碼<input type="text" id="cHexIn" data-in="hexin" value="'+c.toUpperCase()+'" maxlength="7" style="width:96px;font-variant-numeric:tabular-nums" autocomplete="off" spellcheck="false"></label><button class="btn pri sm" data-act="savecolor" style="margin-left:auto;white-space:nowrap">儲存顏色</button></div>'+'<div class="row" style="justify-content:flex-end"><button class="btn sm" data-act="picker">收起檢色器</button></div>'+
+  '<div class="row" style="flex-wrap:nowrap;gap:10px"><span id="cPrev" class="cprev" style="background:'+c+'"></span><label class="group" for="cHexIn" style="display:flex;flex-direction:column;gap:2px">色碼<input type="text" id="cHexIn" data-in="hexin" value="'+c.toUpperCase()+'" maxlength="7" style="width:96px;font-variant-numeric:tabular-nums" autocomplete="off" spellcheck="false"></label><button class="btn pri sm" data-act="savecolor" style="margin-left:auto;white-space:nowrap">儲存顏色</button></div>'+
   '<div class="fld" style="margin:0"><span class="lb">按鈕文字</span><div class="row" style="gap:10px"><div class="seg">'+[['white','白色'],['dark','深色']].map(([k,n])=>'<button data-act="tink" data-v="'+k+'" aria-pressed="'+((t.ink==='dark'?'dark':'white')===k)+'">'+n+'</button>').join('')+'</div><span class="meta">預覽</span><span class="btn pri sm" aria-hidden="true">記錄</span></div></div>'+
   '<span class="group">太淺的顏色在淺色模式會自動調深一點，太深的顏色在深色模式會自動調亮一點。按鈕的底色也會照文字顏色微調，讓字看得清楚。</span></div>'}
 function syncCustom(hex,fromHsv){S.cfg.theme=Object.assign({},S.cfg.theme,{accent:'custom',custom:hex});applyTheme();
@@ -548,7 +548,6 @@ document.addEventListener('click',ev=>{
     case 'usecolor':syncCustom(v);setCfg();render();break;
     case 'delcolor':{const sv=((S.cfg.theme.saved)||[]).slice();sv.splice(Number(v),1);S.cfg.theme=Object.assign({},S.cfg.theme,{saved:sv});setCfg();render();break}
     case 'calpick':S.calFilter=v;render();window.scrollTo(0,0);break;
-    case 'picker':S.showPicker=!S.showPicker;render();break;
     case 'taccent':if(v==='custom'){if(S.showPicker){S.showPicker=false;render();break}S.showPicker=true}else S.showPicker=false;S.cfg.theme=Object.assign({},S.cfg.theme,{accent:v});if(v==='custom'&&!S.cfg.theme.custom){const r=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();S.cfg.theme.custom=/^#[0-9a-f]{6}$/i.test(r)?r:'#23756A'}setCfg();render();break;
     case 'tmode':S.cfg.theme=Object.assign({},S.cfg.theme,{mode:v});setCfg();render();break;
     case 'tink':S.cfg.theme=Object.assign({},S.cfg.theme,{ink:v});setCfg();render();break;
