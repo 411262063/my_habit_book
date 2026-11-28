@@ -16,16 +16,13 @@ const fmt=n=>Math.round(n*100)/100;
 function fmtDT(iso){const d=new Date(iso);if(isNaN(d))return '';return d.getFullYear()+'/'+pad(d.getMonth()+1)+'/'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())}
 const COLORS=['#23756A','#3B6FD8','#C2456B','#D98A1F','#7A5AC8','#5E8C2E'];
 const THEMES=[{k:'teal',n:'青綠',l:'#23756A',d:'#4FB3A3'},{k:'blue',n:'藍',l:'#2F5FD0',d:'#86A6F5'},{k:'rose',n:'玫瑰',l:'#B83D62',d:'#EE8AA8'},{k:'orange',n:'橘',l:'#B0600E',d:'#F2A95C'},{k:'purple',n:'紫',l:'#6A4BC0',d:'#AE99F2'},{k:'gray',n:'灰',l:'#66706E',d:'#A3ADAA'},{k:'ink',n:'墨黑',l:'#2E3A37',d:'#C9D3D0'}];
-const HOST_THEME=document.documentElement.getAttribute('data-theme');
 function hex2rgb(h){h=String(h||'#000000').replace('#','');return [0,2,4].map(i=>parseInt(h.substr(i,2),16)||0)}
 function rgb2hex(r,g,b){return '#'+[r,g,b].map(x=>Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join('')}
 function mixHex(h,w,t){const a=hex2rgb(h),b=hex2rgb(w);return rgb2hex(...a.map((x,i)=>x+(b[i]-x)*t))}
 function lum(h){const c=hex2rgb(h).map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
 function themeColors(t){if(t.accent==='custom'&&/^#[0-9a-f]{6}$/i.test(t.custom||'')){const c=t.custom;return {l:lum(c)>.45?mixHex(c,'#000000',.35):c,d:lum(c)<.18?mixHex(c,'#ffffff',.45):c}}return THEMES.find(x=>x.k===t.accent)||THEMES[0]}
 function applyTheme(){const t=S.cfg.theme||{};const r=document.documentElement;
-  if(t.mode==='light'||t.mode==='dark')r.setAttribute('data-theme',t.mode);
-  else if(r.dataset.mine){if(HOST_THEME)r.setAttribute('data-theme',HOST_THEME);else r.removeAttribute('data-theme')}
-  r.dataset.mine=t.mode||'';
+  if(t.mode==='light'||t.mode==='dark')r.setAttribute('data-theme',t.mode);else r.removeAttribute('data-theme');
   const a=r.getAttribute('data-theme');const dark=a==='dark'||(a!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);
   const th=themeColors(t);const ac=dark?th.d:th.l;r.style.setProperty('--accent',ac);r.style.setProperty('--good',ac);r.style.setProperty('--accent-ink',lum(ac)>.35?'#101614':'#FFFFFF')}
 try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>applyTheme())}catch(e){}
