@@ -1,7 +1,7 @@
 import {firebaseConfig} from './firebase-config.js';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js';
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,sendPasswordResetEmail} from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js';
-import {initializeFirestore,getFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,onSnapshot} from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js';
+import {initializeFirestore,getFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,deleteDoc,onSnapshot} from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
@@ -107,6 +107,11 @@ function relock(ds,h){const e=entries(ds);const r=e.__r||(e.__r={});const v=e[h.
   const d=isDone(use,v);r[h.id]={d,p:d?s.points:0,s}}
 function setVal(ds,hid,v){const e=entries(ds);if(v===null||v===undefined)delete e[hid];else e[hid]=v;const h=S.cfg.habits.find(x=>x.id===hid);if(h)relock(ds,h);save(dayKey(ds))}
 function setCfg(){save('config',200)}
+/* 還原備份用：目前有、備份檔裡沒有的日子 */
+function daysNotIn(days){return Object.keys(S.days).filter(d=>!Object.prototype.hasOwnProperty.call(days||{},d))}
+/* 從雲端刪掉一天的紀錄文件（只有還原備份會用到） */
+function dropDay(ds){const k=dayKey(ds);clearTimeout(timers[k]);timers[k]=null;
+  deleteDoc(doc(base,k)).catch(()=>setSync('有幾天的舊紀錄沒有從雲端刪掉，重新整理頁面後再還原一次。'))}
 /* 改設定或刪除習慣之前，先用「舊的」設定把還沒鎖定的紀錄鎖起來，過去的結果和點數才不會跟著變 */
 function lockUnlocked(h,skip){for(const d in S.days){if(d===skip)continue;const e=S.days[d];if(e[h.id]!==undefined&&!(e.__r&&e.__r[h.id])){relock(d,h);save(dayKey(d),50)}}}
 
@@ -133,6 +138,8 @@ function startCloud(uid){
       if(k==='config'){S.cfg={habits:v.habits||[],rewards:v.rewards||[],redeemed:v.redeemed||[],theme:v.theme||{},goals:v.goals||{},mig:v.mig||{},rwSort:v.rwSort||'custom',lastBackup:v.lastBackup||null};migrate()}
       else if(k.startsWith('d-'))S.days[k.slice(2)]=v.e||{};
     }
+    /* 別的裝置還原備份時會刪掉某些日子的文件，這裡跟著拿掉，畫面才不會留著舊的紀錄 */
+    for(const ch of snap.docChanges()){const k=ch.doc.id;if(ch.type==='removed'&&k.startsWith('d-')&&!timers[k]&&!inflight[k])delete S.days[k.slice(2)]}
     if(S.mode==='loading'){S.mode='cloud';setSync('已同步到雲端，手機和電腦看到的是同一份。')}
     renderSoon();
   },err=>{clearTimeout(slow);if(S.mode==='loading')useLocal('連不到雲端，資料先存在這個瀏覽器。');else setSync('和雲端的連線中斷了，重新整理頁面可以再連一次。')});
@@ -256,7 +263,7 @@ function dateTitle(ds){const d=pd(ds);return (d.getMonth()+1)+'/'+d.getDate()+'�
 function vToday(){
   const ds=S.date,isT=ds===today();const hs=S.cfg.habits;
   let h='<div class="stack">';
-  h+='<div class="card datebar"><button class="circ" data-act="day" data-v="-1" aria-label="前一天">‹</button><div class="d">'+dateTitle(ds)+(isT?'':'<div><button class="btn sm ghost" data-act="gotoday">回到今天</button></div>')+'</div><button class="circ" data-act="day" data-v="1" aria-label="後一天">›</button></div>';
+  h+='<div class="card datebar"><button class="circ" data-act="day" data-v="-1" aria-label="前一天">‹</button><div class="d">'+dateTitle(ds)+(isT?'':'<div><button class="btn sm ghost" data-act="gotoday">回到今天</button></div>')+'</div><button class="circ" data-act="day" data-v="1" aria-label="後一天"'+(ds>=today()?' disabled title="還沒到明天"':'')+'>›</button></div>';
   if(!hs.length)return h+vStarter()+'</div>';
   const due=hs.filter(x=>scheduled(x,ds));const done=due.filter(x=>doneOn(x,ds));
   let pts=0;due.forEach(x=>pts+=ptsOn(x,ds));
@@ -329,7 +336,7 @@ function vCal(){
       if(dn)inner+='<span class="dot" style="background:'+esc(one.color)+'"></span>';
       else if(sc&&!fut&&ds!==t)inner+='<span class="dot" style="border:2px solid '+esc(one.color)+'"></span>';
       else inner+='<span class="dot"></span>';}
-    h+='<button class="cell'+(fut?' fut':'')+(ds===t?' today':'')+'" style="'+style+'" data-act="openday" data-v="'+ds+'" aria-label="'+m+'月'+d+'日">'+inner+'</button>';
+    h+='<button class="cell'+(fut?' fut':'')+(ds===t?' today':'')+'" style="'+style+'" data-act="openday" data-v="'+ds+'" aria-label="'+m+'月'+d+'日'+(fut?'，還沒到':'')+'"'+(fut?' disabled':'')+'>'+inner+'</button>';
   }
   h+='</div>';
   if(!one)h+='<div class="legend" style="margin-top:10px"><span><i style="background:var(--card)"></i>沒完成</span><span><i style="background:color-mix(in srgb,var(--accent) 45%,var(--card))"></i>完成一部分</span><span><i style="background:color-mix(in srgb,var(--accent) 85%,var(--card))"></i>全部完成</span><span>點日期可以補記</span></div>';
@@ -421,7 +428,8 @@ function vSettings(){let h='<div class="stack">';
   {const t=S.cfg.theme||{};
   h+='<div class="card"><b>外觀</b><div class="fld" style="margin:8px 0 10px"><span class="lb">主題色</span><div class="row" style="gap:14px">'+THEMES.map(x=>'<button class="swc" data-act="taccent" data-v="'+x.k+'" aria-pressed="'+((t.accent||'teal')===x.k)+'"><i style="background:linear-gradient(135deg,'+x.l+' 50%,'+x.d+' 50%)"></i>'+x.n+'</button>').join('')+'<button class="swc" data-act="taccent" data-v="custom" aria-pressed="'+(t.accent==='custom')+'" aria-expanded="'+(!!S.showPicker)+'"><i style="background:conic-gradient(#e33,#ec3,#3c5,#3ae,#73e,#e3a,#e33)"></i>自訂</button></div>'+(S.showPicker?customPanel(t):'')+savedColors(t)+'<span class="group">圓圈左上是淺色模式的顏色，右下是深色模式的顏色。</span></div><div class="fld" style="margin:0"><span class="lb">顯示模式</span><div class="seg">'+[['','跟隨系統'],['light','淺色'],['dark','深色']].map(([k,n])=>'<button data-act="tmode" data-v="'+k+'" aria-pressed="'+((t.mode||'')===k)+'">'+n+'</button>').join('')+'</div></div></div>'}
   h+='<div class="card"><b>備份與還原</b><p class="hint" style="margin:4px 0 10px">你的紀錄已經自動存在雲端、手機和電腦會自動同步，平常不需要手動備份。這裡的「下載備份檔」只是多一層保險——例如想留一份存檔，或要把資料搬到別的帳號時用，不下載也完全不影響雲端的資料。</p><p class="meta" style="margin:0 0 10px">'+(S.cfg.lastBackup?'上次手動備份：'+fmtDT(S.cfg.lastBackup):'還沒有手動備份過')+'</p><div class="fld" style="margin-bottom:10px"><label for="bkName">檔案名稱</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="bkName" data-in="bkname" value="'+esc(S.bkName??('習慣打卡本備份-'+today()))+'" style="flex:1;min-width:0" autocomplete="off"><span class="meta">.json</span></div></div><div class="row"><button class="btn pri" data-act="backup">下載備份檔</button><label class="btn" for="restoreFile">從備份檔還原</label><input type="file" id="restoreFile" accept=".json,application/json" data-in="restore" style="position:absolute;width:1px;height:1px;opacity:0"></div>'+(S.bmsg?'<p class="hint">'+esc(S.bmsg)+'</p>':'');
-  if(S.restore)h+='<div style="margin-top:10px"><p><b>確定要還原嗎？</b>現在的所有習慣和紀錄會換成備份檔裡的內容（'+esc(S.restore.info)+'）。</p><div class="row"><button class="btn danger" data-act="restore2">確定還原</button><button class="btn ghost" data-act="restorecancel">取消</button></div></div>';
+  if(S.restore){const gone=daysNotIn(S.restore.days).length;
+    h+='<div class="confirm" role="alert"><p style="margin:0 0 10px"><b>確定要還原嗎？</b>現在的所有習慣和紀錄會換成備份檔裡的內容（'+esc(S.restore.info)+'）。'+(gone?'目前有 '+gone+' 天的紀錄是備份檔裡沒有的，還原後會被刪除。':'')+'還原之前，建議先下載一份目前的備份。</p><div class="row"><button class="btn" data-act="backup">先下載目前的備份</button><button class="btn danger" data-act="restore2">確定還原</button><button class="btn ghost" data-act="restorecancel">取消</button></div></div>'}
   return h+'</div></div>'}
 
 function vRewards(){
@@ -495,7 +503,7 @@ document.addEventListener('click',ev=>{
   const ds=S.date;const H=S.cfg.habits.find(h=>h.id===hid);
   switch(act){
     case 'tab':S.view=v;S.confirm=null;render();window.scrollTo(0,0);break;
-    case 'day':S.date=addDays(S.date,Number(v));S.rowEdit=null;render();break;
+    case 'day':{const n=addDays(S.date,Number(v));if(n>today())break;S.date=n;S.rowEdit=null;render();break} /* 不能往後到未來的日子 */
     case 'gotoday':S.date=today();S.rowEdit=null;render();break;
     case 'check':setVal(ds,hid,(entries(ds)[hid]===true)?null:true);render();break;
     case 'opt':setVal(ds,hid,entries(ds)[hid]===Number(v)?null:Number(v));render();break;
@@ -521,7 +529,7 @@ document.addEventListener('click',ev=>{
     case 'rowcancel':S.rowEdit=null;S.drafts[hid]={};render();break;
     case 'delrow':{S.rowEdit=null;const rows=(entries(ds)[hid]||[]).slice();rows.splice(Number(v),1);setVal(ds,hid,rows.length?rows:null);render();break}
     case 'mon':{const [y,m]=S.calMonth.split('-').map(Number);const d=new Date(y,m-1+Number(v),1);S.calMonth=d.getFullYear()+'-'+pad(d.getMonth()+1);render();break}
-    case 'openday':S.date=v;S.view='today';render();window.scrollTo(0,0);break;
+    case 'openday':if(v>today())break;S.date=v;S.view='today';render();window.scrollTo(0,0);break;
     case 'template':template();break;
     case 'rwtemplate':rwTemplate();break;
     case 'new':S.edit=blankHabit();S.confirm=null;render();break;
@@ -571,8 +579,8 @@ document.addEventListener('click',ev=>{
     case 'authreset':(async()=>{const au=S.auth;au.err='';au.msg='';if(!au.email){au.err='請輸入 email。';render();return}au.busy=true;render();
       try{await sendPasswordResetEmail(fbAuth,au.email.trim());au.busy=false;au.msg='已經把重設密碼的信寄到 '+au.email+'，記得看看垃圾信件匣。';render()}catch(e){au.busy=false;au.err=authErrMsg(e);render()}})();break;
     case 'signout':signOut(fbAuth);break;
-    case 'restore2':{const r=S.restore;S.restore=null;S.cfg=r.cfg;S.days=r.days;S.bmsg='已還原。';
-      if(S.mode==='cloud'){save('config',0);Object.keys(S.days).forEach((d,i)=>save(dayKey(d),100+i*60))}else saveLocal();render();break}
+    case 'restore2':{const r=S.restore;S.restore=null;const gone=daysNotIn(r.days);S.cfg=r.cfg;S.days=r.days;S.bmsg='已還原。';
+      if(S.mode==='cloud'){save('config',0);Object.keys(S.days).forEach((d,i)=>save(dayKey(d),100+i*60));gone.forEach(dropDay)}else saveLocal();render();break}
     case 'restorecancel':S.restore=null;render();break;
     case 'cancel':S.confirm=null;S.edit?rerenderModal():render();break;
     case 'addrw':{const n=$('#rwName').value.trim(),c=parseInt($('#rwCost').value);if(!n||!(c>0)){$(!n?'#rwName':'#rwCost').focus();break}

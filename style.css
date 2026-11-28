@@ -62,6 +62,9 @@ nav button[aria-current="page"]{background:var(--accent-fill);color:var(--accent
 .tick .o{width:54px;height:54px;flex:none;border-radius:50%;border:3px dashed var(--hc);display:grid;place-items:center;font-size:24px;color:transparent}
 .tick[aria-pressed="true"] .o{border-style:solid;background:var(--hc);color:var(--hc-ink,var(--accent-ink))}
 .circ{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:20px;line-height:1;display:grid;place-items:center;flex:none}
+.circ:disabled{opacity:.35;cursor:default}
+.confirm{margin-top:12px;padding:12px 14px;border:1px solid var(--warn);border-radius:12px;background:color-mix(in srgb,var(--warn) 8%,var(--card))}
+.cell:disabled{cursor:default}
 .ticket{display:grid;grid-template-columns:1fr auto;align-items:stretch;background:color-mix(in srgb,var(--gold) 9%,var(--card));border:0;
   -webkit-mask:radial-gradient(circle 9px at 0 50%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 9px at 100% 50%,#0000 98%,#000) right/51% 100% no-repeat;
   mask:radial-gradient(circle 9px at 0 50%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 9px at 100% 50%,#0000 98%,#000) right/51% 100% no-repeat}
