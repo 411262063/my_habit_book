@@ -93,6 +93,8 @@ function entries(ds){return S.days[ds]||(S.days[ds]={})}
 function relock(ds,h){const e=entries(ds);const r=e.__r||(e.__r={});const v=e[h.id];if(v===undefined){delete r[h.id];return}const d=isDone(h,v);r[h.id]={d,p:d?(Number(h.points)||0):0}}
 function setVal(ds,hid,v){const e=entries(ds);if(v===null||v===undefined)delete e[hid];else e[hid]=v;const h=S.cfg.habits.find(x=>x.id===hid);if(h)relock(ds,h);save(dayKey(ds))}
 function setCfg(){save('config',200)}
+/* 改設定或刪除習慣之前，先用「舊的」設定把還沒鎖定的紀錄鎖起來，過去的結果和點數才不會跟著變 */
+function lockUnlocked(h,skip){for(const d in S.days){if(d===skip)continue;const e=S.days[d];if(e[h.id]!==undefined&&!(e.__r&&e.__r[h.id])){relock(d,h);save(dayKey(d),50)}}}
 
 async function init(){
   render();
@@ -554,12 +556,12 @@ document.addEventListener('click',ev=>{
       if(e.freq.kind==='weekdays'&&!(e.freq.days||[]).length)e.freq.days=[1,2,3,4,5];
       if(e.type==='list'&&!(e.fields||[]).length)e.fields=['數量'];
       e.name=e.name.trim();const i=S.cfg.habits.findIndex(h=>h.id===e.id);
-      if(i>=0)S.cfg.habits[i]=e;else S.cfg.habits.push(e);
+      if(i>=0){lockUnlocked(S.cfg.habits[i],today());S.cfg.habits[i]=e}else S.cfg.habits.push(e);
       {const t=today();if(S.days[t]&&S.days[t][e.id]!==undefined){relock(t,e);save(dayKey(t))}}
       S.edit=null;setCfg();render();break}
     case 'eclose':S.edit=null;S.confirm=null;render();break;
     case 'edel':S.confirm='del-'+S.edit.id;rerenderModal();break;
-    case 'edel2':{const old=S.cfg.habits.find(h=>h.id===S.edit.id);if(old)for(const d in S.days){const e=S.days[d];if(e[old.id]!==undefined&&!(e.__r&&e.__r[old.id])){relock(d,old);save(dayKey(d),50)}}}S.cfg.habits=S.cfg.habits.filter(h=>h.id!==S.edit.id);S.edit=null;S.confirm=null;setCfg();render();break;
+    case 'edel2':{const old=S.cfg.habits.find(h=>h.id===S.edit.id);if(old)lockUnlocked(old)}S.cfg.habits=S.cfg.habits.filter(h=>h.id!==S.edit.id);S.edit=null;S.confirm=null;setCfg();render();break;
     case 'savecolor':{const c=(S.cfg.theme||{}).custom;if(!c)break;const sv=((S.cfg.theme.saved)||[]).filter(x=>x.toLowerCase()!==c.toLowerCase());sv.push(c);S.cfg.theme=Object.assign({},S.cfg.theme,{saved:sv.slice(-12)});setCfg();render();break}
     case 'usecolor':syncCustom(v);setCfg();render();break;
     case 'delcolor':{const sv=((S.cfg.theme.saved)||[]).slice();sv.splice(Number(v),1);S.cfg.theme=Object.assign({},S.cfg.theme,{saved:sv});setCfg();render();break}
