@@ -90,7 +90,16 @@ async function writeDoc(key){
 }
 function dayKey(ds){return 'd-'+ds}
 function entries(ds){return S.days[ds]||(S.days[ds]={})}
-function relock(ds,h){const e=entries(ds);const r=e.__r||(e.__r={});const v=e[h.id];if(v===undefined){delete r[h.id];return}const d=isDone(h,v);r[h.id]={d,p:d?(Number(h.points)||0):0}}
+/* 鎖定時順便記下「判斷完成要用到的設定」s，之後修改過去那天的紀錄，就照當天的設定重算，不照現在的 */
+function lockSnap(h){const s={type:h.type,points:Number(h.points)||0};if(h.target!==undefined)s.target=h.target;if(h.dir!=null)s.dir=h.dir;if(h.minCount!=null)s.minCount=h.minCount;
+  if(h.type==='options')s.od=(h.options||[]).map(o=>!!(o&&o.done));return s}
+function fromSnap(h,s){const x=Object.assign({},h,{type:s.type,points:s.points,target:s.target,dir:s.dir,minCount:s.minCount});if(s.od)x.options=s.od.map(d=>({done:d}));return x}
+function relock(ds,h){const e=entries(ds);const r=e.__r||(e.__r={});const v=e[h.id];const old=r[h.id];const past=ds<today();
+  let use=h;
+  if(past&&old){if(old.s)use=fromSnap(h,old.s);else if(old.d)use=Object.assign({},h,{points:Number(old.p)||0})} /* 舊的鎖定沒有 s：點數用當時拿到的，完成與否用現在的目標 */
+  const s=lockSnap(use);
+  if(v===undefined){if(past&&old)r[h.id]={d:false,p:0,s};else delete r[h.id];return} /* 過去的紀錄清掉時保留 s，再填回來還是照當天的設定 */
+  const d=isDone(use,v);r[h.id]={d,p:d?s.points:0,s}}
 function setVal(ds,hid,v){const e=entries(ds);if(v===null||v===undefined)delete e[hid];else e[hid]=v;const h=S.cfg.habits.find(x=>x.id===hid);if(h)relock(ds,h);save(dayKey(ds))}
 function setCfg(){save('config',200)}
 /* 改設定或刪除習慣之前，先用「舊的」設定把還沒鎖定的紀錄鎖起來，過去的結果和點數才不會跟著變 */
